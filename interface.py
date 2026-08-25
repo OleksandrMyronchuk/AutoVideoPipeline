@@ -260,14 +260,16 @@ class VideoPipelineUI:
                     ui.label('PLUGINS + PROMPTS').classes('text-slate-400 text-xs font-semibold mb-1')
                     ui.label(f'Workspace: {workspace_id}').classes('muted text-xs mb-2')
                     selected_folder = {'path': 'plugins'}
+                    selected_item = {'path': None}
                     workspace_tree = ui.tree(
                         self.file_system.tree(),
                         label_key='label',
-                        on_select=lambda event: self.select_editor_tree_item(event, editor_id, selected_folder),
+                        on_select=lambda event: self.select_editor_tree_item(event, editor_id, selected_folder, selected_item),
                     ).props('dense no-connectors').classes('w-full text-slate-200')
                     ui.separator().classes('my-2')
                     ui.button('Create file', icon='note_add', on_click=lambda: self.create_provider_file(False, workspace_tree, selected_folder)).props('flat align=left').classes('w-full justify-start text-slate-300 text-xs')
                     ui.button('Create folder', icon='create_new_folder', on_click=lambda: self.create_provider_file(True, workspace_tree, selected_folder)).props('flat align=left').classes('w-full justify-start text-slate-300 text-xs')
+                    ui.button('Delete selected', icon='delete', on_click=lambda: self.confirm_delete_provider_item(workspace_tree, selected_folder, selected_item)).props('flat align=left color=negative').classes('w-full justify-start text-xs')
                 with ui.column().classes('editor-surface flex-1 min-w-0 p-3'):
                     ui.label('EDITOR').classes('muted text-xs font-semibold tracking-wider mb-2')
                     ui.button('Save', icon='save', on_click=lambda: self.save_active_editor(editor_id)).props('unelevated').classes('bg-orange-600 text-white self-start mb-2')
@@ -379,10 +381,11 @@ class VideoPipelineUI:
             candidate.write_text('Analyze this video and return structured JSON.\n', encoding='utf-8')
         ui.notify(f'Created {folder}/{candidate.name}', type='positive')
 
-    async def select_editor_tree_item(self, event, editor_id, selected_folder):
+    async def select_editor_tree_item(self, event, editor_id, selected_folder, selected_item):
         relative_path = event.value
         try:
             path = self.file_system.safe_path(relative_path)
+            selected_item['path'] = relative_path
             if path.is_dir():
                 selected_folder['path'] = relative_path
                 return
@@ -390,6 +393,36 @@ class VideoPipelineUI:
             await self.load_editor_file(relative_path, editor_id)
         except (OSError, ValueError) as error:
             ui.notify(str(error), type='negative')
+
+    def confirm_delete_provider_item(self, workspace_tree, selected_folder, selected_item):
+        relative_path = selected_item['path']
+        if not relative_path:
+            ui.notify('Select a file or folder first.', type='negative')
+            return
+        if relative_path in FileSystemProvider.ALLOWED_DIRECTORIES:
+            ui.notify('The plugins and prompts folders cannot be deleted.', type='negative')
+            return
+        with ui.dialog() as dialog, ui.card().classes('editor-dialog bg-slate-800 text-white w-[min(560px,92vw)] p-5'):
+            ui.label(f'Delete {relative_path}?').classes('text-xl font-semibold')
+            ui.label('This permanently removes the selected item and its contents.').classes('muted mt-2')
+
+            def delete_item():
+                try:
+                    self.file_system.delete(relative_path)
+                    workspace_tree.props['nodes'] = self.file_system.tree()
+                    workspace_tree.update()
+                    selected_item['path'] = None
+                    selected_folder['path'] = 'plugins'
+                    dialog.close()
+                    ui.notify(f'Deleted {relative_path}', type='positive')
+                except (OSError, ValueError) as error:
+                    logger.exception('editor item deletion failed root=%s path=%s', self.editor_workspace, relative_path)
+                    ui.notify(str(error), type='negative')
+
+            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('Cancel', on_click=dialog.close).props('flat')
+                ui.button('Delete', on_click=delete_item).props('unelevated color=negative')
+        dialog.open()
 
     def create_provider_file(self, directory, workspace_tree, selected_folder):
         folder = selected_folder['path']

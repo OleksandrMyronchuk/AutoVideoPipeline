@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import shutil
 
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,17 @@ class FileSystemProvider:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.touch(exist_ok=False)
         logger.info('workspace create root=%s path=%s directory=%s', self.workspace_root, relative_path, directory)
+
+    def delete(self, relative_path: str) -> None:
+        path = self.safe_path(relative_path)
+        relative = path.relative_to(self.workspace_root)
+        if len(relative.parts) == 1:
+            raise ValueError('The plugins and prompts folders cannot be deleted.')
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+        logger.info('workspace delete root=%s path=%s', self.workspace_root, relative_path)
 
     def _file_paths(self) -> list[str]:
         return sorted(path.relative_to(self.workspace_root).as_posix() for path in self.workspace_root.rglob('*') if path.is_file() and self._visible(path))
