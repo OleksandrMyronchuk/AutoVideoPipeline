@@ -1,0 +1,23 @@
+# Virtual environment
+.venv/
+
+# Python cache and tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local NiceGUI/runtime files
+uploads/
+*.log
+
+# Build and packaging output
+build/
+dist/
+*.egg-info/
+
+# Local editor and OS files
+.vscode/*.code-workspace
+.DS_Store
+Thumbs.db

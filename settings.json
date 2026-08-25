@@ -1,0 +1,6 @@
+{
+  "input_path": "A:\\stalker_walkthrough.mp4",
+  "output_path": "A:\\clips",
+  "segment_duration": 60,
+  "ffmpeg_path": "Auto-detect"
+}
