@@ -11,6 +11,8 @@ The default configuration is stored in [settings.json](settings.json). It starts
 3. Open `app.py` and click **Run Python File** or press `F5` and choose **Run Auto Video Pipeline**.
 4. Open `http://localhost:8080` in your browser.
 
+If port 8080 is already in use, start the app on another port with `$env:AVP_PORT=8081` before running `app.py`, then open `http://localhost:8081`.
+
 Install the optional bundled FFmpeg helper first if needed:
 
 ```powershell
@@ -20,3 +22,16 @@ Install the optional bundled FFmpeg helper first if needed:
 The app can also use an FFmpeg installation available on your `PATH`, or a custom executable selected in **Settings**.
 
 Change the source path, output folder, FFmpeg executable, or clip duration in **Settings**, then click **Save settings**. Those values are written back to `settings.json` and loaded the next time the app starts.
+
+## Project structure
+
+- `app.py` is the VS Code Run entrypoint.
+- `interface.py` contains the NiceGUI screens and user interactions.
+- `config.py` loads and saves persistent configuration.
+- `video_processor.py` contains FFmpeg operations.
+- `services/api_client.py` contains resilient API requests and buffer safety checks.
+- `services/analysis_runner.py` processes configured clips and writes JSON results.
+- `plugins/` contains built-in and user-added analysis scripts.
+- `docs/PLUGIN_DEVELOPMENT.md` documents the plugin contract and API safety rules.
+
+Open **Analyze Video** to use **Narration and Dialogues** or **Event Timeline**. The `+` button opens the extension menu and documentation.

@@ -1,0 +1,1 @@
+Analyze this video clip for narration and spoken dialogues. Return structured JSON with narration, dialogue, speakers, context, and state_update.

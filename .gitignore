@@ -11,11 +11,13 @@ __pycache__/
 # Local NiceGUI/runtime files
 uploads/
 *.log
+.script_workspaces/
 
 # Build and packaging output
 build/
 dist/
 *.egg-info/
+node_modules/
 
 # Local editor and OS files
 .vscode/*.code-workspace

@@ -2,5 +2,15 @@
   "input_path": "A:\\stalker_walkthrough.mp4",
   "output_path": "A:\\clips",
   "segment_duration": 60,
-  "ffmpeg_path": "Auto-detect"
+  "ffmpeg_path": "Auto-detect",
+  "analysis_api_url": "http://localhost:8085/request_custom_path",
+  "analysis_workflow_path": "A:\\aistudio_g37_norm",
+  "analysis_clips_dir": "A:\\clips",
+  "analysis_output_dir": "A:\\data_2",
+  "analysis_state_file": "A:\\settings\\state.json",
+  "analysis_request_dir": "A:\\requests",
+  "analysis_request_file": "A:\\requests\\request1.txt",
+  "analysis_skip_existing": true,
+  "analysis_request_timeout": 9999,
+  "analysis_max_retries": 3
 }

@@ -1,0 +1,1 @@
+Analyze this video clip and produce a chronological event timeline. Return structured JSON with timestamps, events, participants, and state_update.
