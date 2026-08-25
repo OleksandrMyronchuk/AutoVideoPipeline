@@ -291,7 +291,8 @@ class VideoPipelineUI:
                     ui.separator().classes('my-2')
                     ui.button('Create file', icon='note_add', on_click=lambda: self.create_provider_file(False, workspace_tree, selected_folder)).props('flat align=left').classes('w-full justify-start text-slate-300 text-xs')
                     ui.button('Create folder', icon='create_new_folder', on_click=lambda: self.create_provider_file(True, workspace_tree, selected_folder)).props('flat align=left').classes('w-full justify-start text-slate-300 text-xs')
-                    ui.button('Delete selected', icon='delete', on_click=lambda: self.confirm_delete_provider_item(workspace_tree, selected_folder, selected_item)).props('flat align=left color=negative').classes('w-full justify-start text-xs')
+                    ui.button('Rename', icon='drive_file_rename_outline', on_click=lambda: self.rename_provider_item(workspace_tree, selected_folder, selected_item, editor_id)).props('flat align=left').classes('w-full justify-start text-slate-300 text-xs')
+                    ui.button('Delete', icon='delete', on_click=lambda: self.confirm_delete_provider_item(workspace_tree, selected_folder, selected_item)).props('flat align=left color=negative').classes('w-full justify-start text-xs')
                 with ui.column().classes('editor-surface flex-1 min-w-0 p-3'):
                     ui.label('EDITOR').classes('muted text-xs font-semibold tracking-wider mb-2')
                     ui.button('Save', icon='save', on_click=lambda: self.save_active_editor(editor_id)).props('unelevated').classes('bg-orange-600 text-white self-start mb-2')
@@ -415,6 +416,42 @@ class VideoPipelineUI:
             await self.load_editor_file(relative_path, editor_id)
         except (OSError, ValueError) as error:
             ui.notify(str(error), type='negative')
+
+    def rename_provider_item(self, workspace_tree, selected_folder, selected_item, editor_id):
+        relative_path = selected_item['path']
+        if not relative_path:
+            ui.notify('Select a file or folder first.', type='negative')
+            return
+        if relative_path in FileSystemProvider.ALLOWED_DIRECTORIES:
+            ui.notify('The plugins and prompts folders cannot be renamed.', type='negative')
+            return
+        path = Path(relative_path)
+        with ui.dialog() as dialog, ui.card().classes('editor-dialog bg-slate-800 text-white w-[min(560px,92vw)] p-5'):
+            ui.label(f'Rename {relative_path}').classes('text-xl font-semibold')
+            name_input = ui.input('Name', value=path.name).classes('w-full mt-4')
+
+            def rename_item():
+                name = (name_input.value or '').strip()
+                if not name or '/' in name or '\\' in name or name in {'.', '..'}:
+                    ui.notify('Enter a valid name.', type='negative')
+                    return
+                new_path = f'{path.parent.as_posix()}/{name}'
+                try:
+                    self.file_system.rename(relative_path, new_path)
+                    workspace_tree.props['nodes'] = self.file_system.tree()
+                    workspace_tree.update()
+                    selected_item['path'] = new_path
+                    selected_folder['path'] = path.parent.as_posix()
+                    ui.run_javascript(f"if (window.avpEditors[{editor_id!r}] && window.avpEditors[{editor_id!r}].path === {relative_path!r}) window.avpEditors[{editor_id!r}].path = {new_path!r};")
+                    dialog.close()
+                    ui.notify(f'Renamed to {new_path}', type='positive')
+                except (OSError, ValueError) as error:
+                    ui.notify(str(error), type='negative')
+
+            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('Cancel', on_click=dialog.close).props('flat')
+                ui.button('Rename', on_click=rename_item).props('unelevated').classes('bg-orange-600 text-white')
+        dialog.open()
 
     def confirm_delete_provider_item(self, workspace_tree, selected_folder, selected_item):
         relative_path = selected_item['path']

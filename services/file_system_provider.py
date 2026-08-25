@@ -67,6 +67,18 @@ class FileSystemProvider:
             path.unlink()
         logger.info('workspace delete root=%s path=%s', self.workspace_root, relative_path)
 
+    def rename(self, relative_path: str, new_relative_path: str) -> None:
+        path = self.safe_path(relative_path)
+        new_path = self.safe_path(new_relative_path)
+        if not path.exists():
+            raise FileNotFoundError(f'Item not found: {relative_path}')
+        if new_path.exists():
+            raise FileExistsError(f'An item already exists at {new_relative_path}.')
+        if path.parent != new_path.parent:
+            raise ValueError('Items can only be renamed within their current folder.')
+        path.rename(new_path)
+        logger.info('workspace rename root=%s path=%s new_path=%s', self.workspace_root, relative_path, new_relative_path)
+
     def _file_paths(self) -> list[str]:
         return sorted(path.relative_to(self.workspace_root).as_posix() for path in self.workspace_root.rglob('*') if path.is_file() and self._visible(path))
 
