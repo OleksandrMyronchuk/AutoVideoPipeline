@@ -136,7 +136,49 @@ class VideoPipelineUI:
                         with ui.column().classes('gap-1'):
                             ui.label(script.name).classes('text-white text-lg font-semibold')
                             ui.label(script.description).classes('muted')
+                        with ui.row().classes('items-center gap-1'):
                             ui.button('Edit', icon='edit', on_click=lambda item=script: self.open_script(item)).props('flat')
+                            if script.workspace_root:
+                                ui.button('Rename', icon='drive_file_rename_outline', on_click=lambda item=script: self.open_rename_script(item)).props('flat')
+                                ui.button('Delete', icon='delete', on_click=lambda item=script: self.confirm_delete_script(item)).props('flat color=negative')
+
+    def open_rename_script(self, script):
+        with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(560px,92vw)] p-5'):
+            ui.label('Rename script').classes('text-xl font-semibold')
+            name_input = ui.input('Script name', value=script.name).classes('w-full mt-4')
+
+            def rename():
+                try:
+                    self.registry.rename(script, name_input.value or '')
+                    self.render_script_list()
+                    dialog.close()
+                    ui.notify('Script renamed', type='positive')
+                except (OSError, ValueError) as error:
+                    ui.notify(str(error), type='negative')
+
+            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('Cancel', on_click=dialog.close).props('flat')
+                ui.button('Rename', on_click=rename).props('unelevated').classes('bg-orange-600 text-white')
+        dialog.open()
+
+    def confirm_delete_script(self, script):
+        with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(560px,92vw)] p-5'):
+            ui.label(f'Delete {script.name}?').classes('text-xl font-semibold')
+            ui.label('This permanently removes the script workspace and its files.').classes('muted mt-2')
+
+            def delete():
+                try:
+                    self.registry.delete(script)
+                    self.render_script_list()
+                    dialog.close()
+                    ui.notify('Script deleted', type='positive')
+                except (OSError, ValueError) as error:
+                    ui.notify(str(error), type='negative')
+
+            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('Cancel', on_click=dialog.close).props('flat')
+                ui.button('Delete', on_click=delete).props('unelevated color=negative')
+        dialog.open()
 
     def open_script(self, script):
         self.open_editor(script)

@@ -27,7 +27,7 @@ def get_script():
     )
 ```
 
-Restart the app, open **Analyze Video**, and the new script appears in the list. Open it to inspect the prompt and configure its fields. The **+ Add script** action opens the locally installed Monaco Editor in edit mode with a file manager for plugin and prompt files, and its **Read Docs** button opens this guidance in the app.
+Restart the app, open **Analyze Video**, and the new script appears in the list. Open it to inspect the prompt and configure its fields. Custom scripts can be renamed or deleted from the list; deletion removes the entire script workspace. The **+ Add script** action opens the locally installed Monaco Editor in edit mode with a file manager for plugin and prompt files, and its **Read Docs** button opens this guidance in the app.
 
 ## URL navigation
 

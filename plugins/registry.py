@@ -1,6 +1,8 @@
 import importlib.util
+import json
 import logging
 from pathlib import Path
+import shutil
 
 from .base import AnalysisScript
 from .builtin import builtin_scripts
@@ -13,6 +15,10 @@ class ScriptRegistry:
     def __init__(self, external_dir: Path):
         self.external_dir = external_dir.resolve()
         self.workspace_dir = self.external_dir.parent / '.script_workspaces'
+        self.scripts = {script.key: script for script in builtin_scripts()}
+        self.load_external()
+
+    def reload(self):
         self.scripts = {script.key: script for script in builtin_scripts()}
         self.load_external()
 
@@ -41,6 +47,7 @@ class ScriptRegistry:
                     script = factory()
                     if isinstance(script, AnalysisScript):
                         script.workspace_root = workspace_root
+                        self._apply_metadata(script)
                         self.scripts[script.key] = script
                     else:
                         logger.warning('ignored plugin without AnalysisScript file=%s', file)
@@ -54,6 +61,32 @@ class ScriptRegistry:
 
     def get(self, key: str) -> AnalysisScript:
         return self.scripts[key]
+
+    def rename(self, script: AnalysisScript, name: str) -> None:
+        if not script.workspace_root:
+            raise ValueError('Built-in scripts cannot be renamed.')
+        name = name.strip()
+        if not name:
+            raise ValueError('Script name cannot be empty.')
+        metadata_path = script.workspace_root / '.script.json'
+        metadata_path.write_text(json.dumps({'name': name}, indent=2) + '\n', encoding='utf-8')
+        self.reload()
+
+    def delete(self, script: AnalysisScript) -> None:
+        if not script.workspace_root:
+            raise ValueError('Built-in scripts cannot be deleted.')
+        shutil.rmtree(script.workspace_root)
+        self.reload()
+
+    @staticmethod
+    def _apply_metadata(script: AnalysisScript) -> None:
+        metadata_path = script.workspace_root / '.script.json'
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return
+        if isinstance(metadata.get('name'), str) and metadata['name'].strip():
+            script.name = metadata['name'].strip()
 
     @staticmethod
     def prompt_text(script: AnalysisScript) -> str:

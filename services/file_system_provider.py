@@ -67,4 +67,4 @@ class FileSystemProvider:
 
     @staticmethod
     def _visible(path: Path) -> bool:
-        return path.name not in {'.git', '.venv', '__pycache__', 'node_modules'} and (path.is_dir() or path.suffix in FileSystemProvider.ALLOWED_EXTENSIONS)
+        return path.name not in {'.git', '.venv', '__pycache__', 'node_modules', '.script.json'} and (path.is_dir() or path.suffix in FileSystemProvider.ALLOWED_EXTENSIONS)
