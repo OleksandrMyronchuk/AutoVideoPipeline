@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -199,18 +200,39 @@ class VideoPipelineUI:
                     ui.button('Read Docs', icon='menu_book', on_click=lambda: self.show_plugin_docs(dialog)).props('outline').classes('w-full')
                     ui.label('Open complete and cohesive documentation.').classes('muted text-sm')
                 with ui.column().classes('flex-1 gap-1'):
-                    ui.button('Create a New Script', icon='add', on_click=lambda: self.open_new_script_editor(dialog)).props('unelevated').classes('w-full bg-orange-600')
+                    ui.button('Create a New Script', icon='add', on_click=lambda: self.open_new_script_dialog(dialog)).props('unelevated').classes('w-full bg-orange-600')
                     ui.label('Allow you to create a new script using hooks.').classes('muted text-sm')
             ui.button('Close', on_click=dialog.close).props('flat').classes('mt-2')
         dialog.open()
 
-    def open_new_script_editor(self, parent_dialog):
+    def open_new_script_dialog(self, parent_dialog):
         parent_dialog.close()
+        with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(560px,92vw)] p-5'):
+            ui.label('Name your script').classes('text-xl font-semibold')
+            name_input = ui.input('Script name').classes('w-full mt-4')
+
+            def create():
+                name = (name_input.value or '').strip()
+                if not name:
+                    ui.notify('Script name cannot be empty.', type='negative')
+                    return
+                self.open_new_script_editor(dialog, name)
+
+            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('Cancel', on_click=dialog.close).props('flat')
+                ui.button('Create', on_click=create).props('unelevated').classes('bg-orange-600 text-white')
+        dialog.open()
+
+    def open_new_script_editor(self, dialog, name):
+        dialog.close()
         workspace_id = uuid4().hex
         workspace = Path(__file__).with_name('.script_workspaces') / workspace_id
         provider = FileSystemProvider(workspace)
         provider.write('plugins/my_script.py', self.default_plugin_content(workspace_id))
         provider.write('prompts/my_prompt.txt', 'Analyze this video and return structured JSON.\n')
+        (workspace / '.script.json').write_text(json.dumps({'name': name}, indent=2) + '\n', encoding='utf-8')
+        self.registry.reload()
+        self.render_script_list()
         logger.info('new script opened workspace_id=%s root=%s', workspace_id, workspace.resolve())
         ui.run_javascript(f"window.open('/script_editor/{workspace_id}', '_blank', 'noopener,noreferrer')")
 
