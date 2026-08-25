@@ -278,16 +278,34 @@ class VideoPipelineUI:
                 ui.label('SCRIPT WORKSPACE').classes('text-orange-400 text-xs font-semibold tracking-wider')
             with ui.row().classes('editor-layout w-full items-stretch gap-3 flex-col md:flex-row'):
                 with ui.column().classes('editor-explorer w-full md:w-72 shrink-0 p-3 gap-1'):
-                    ui.label('FILES').classes('muted text-xs font-semibold tracking-wider mb-2')
+                    with ui.row().classes('w-full items-center justify-between mb-2'):
+                        ui.label('FILES').classes('muted text-xs font-semibold tracking-wider')
+                        expand_button = ui.button('Collapse all', icon='unfold_less', on_click=lambda: toggle_folders()).props('flat dense').classes('text-slate-300 text-xs')
                     ui.label('PLUGINS + PROMPTS').classes('text-slate-400 text-xs font-semibold mb-1')
                     ui.label(f'Workspace: {workspace_id}').classes('muted text-xs mb-2')
                     selected_folder = {'path': 'plugins'}
                     selected_item = {'path': None}
+                    folders_expanded = {'value': True}
                     workspace_tree = ui.tree(
                         self.file_system.tree(),
                         label_key='label',
                         on_select=lambda event: self.select_editor_tree_item(event, editor_id, selected_folder, selected_item),
                     ).props('dense no-connectors').classes('w-full text-slate-200')
+
+                    def toggle_folders():
+                        folder_paths = self.editor_folder_paths(workspace_tree.props['nodes'])
+                        if folders_expanded['value']:
+                            workspace_tree.collapse(folder_paths)
+                            expand_button.text = 'Expand all'
+                            expand_button.props('icon=unfold_more')
+                        else:
+                            workspace_tree.expand(folder_paths)
+                            expand_button.text = 'Collapse all'
+                            expand_button.props('icon=unfold_less')
+                        folders_expanded['value'] = not folders_expanded['value']
+                        expand_button.update()
+
+                    workspace_tree.expand(self.editor_folder_paths(workspace_tree.props['nodes']))
                     ui.separator().classes('my-2')
                     ui.button('Create file', icon='note_add', on_click=lambda: self.create_provider_file(False, workspace_tree, selected_folder)).props('flat align=left').classes('w-full justify-start text-slate-300 text-xs')
                     ui.button('Create folder', icon='create_new_folder', on_click=lambda: self.create_provider_file(True, workspace_tree, selected_folder)).props('flat align=left').classes('w-full justify-start text-slate-300 text-xs')
@@ -387,6 +405,15 @@ class VideoPipelineUI:
             ui.label('Use Ctrl+S / Cmd+S to save the active file.').classes('muted text-xs mt-3')
             ui.button('Close', on_click=dialog.close).props('flat').classes('mt-2')
         dialog.open()
+
+    @staticmethod
+    def editor_folder_paths(nodes):
+        paths = []
+        for node in nodes:
+            if 'children' in node:
+                paths.append(node['id'])
+                paths.extend(VideoPipelineUI.editor_folder_paths(node['children']))
+        return paths
 
     def create_editor_file(self, folder):
         directory = Path(__file__).with_name(folder)
