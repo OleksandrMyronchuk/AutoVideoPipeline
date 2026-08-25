@@ -11,6 +11,11 @@ class ScriptConfig:
     default: Any = None
     kind: str = 'text'
 
+    def value_for(self, saved: dict[str, Any], fallback: Any = None) -> Any:
+        if self.key in saved:
+            return saved[self.key]
+        return self.default if self.default is not None else fallback
+
 
 @dataclass
 class AnalysisScript:

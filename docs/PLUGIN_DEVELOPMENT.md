@@ -48,6 +48,10 @@ Use `BufferedAPIClient` for API requests. It resets the external buffer to `noth
 
 Each `ScriptConfig` has a `key`, human-readable `name`, `description`, `default` value, and `kind`. Use `default=None` when a field must be supplied by the user. Built-in defaults for shared paths are overridden from `settings.json` when the script dialog opens.
 
+Open **Analyze Video**, choose **Configure & Run**, and the prompt plus declared fields are shown together. Values are remembered per script. Supported kinds are `text` (the default), `number`, and `boolean`; unknown kinds use a text field. The runner also sends all values in the API payload as `script_config`.
+
+Use `get_pipeline_logger(__name__, script=script.key)` in plugin services and call `logger.event('your_event', detail=value)` for consistent JSON log records. The application writes these records to `.script_workspaces/script_editor.log`.
+
 ## Configuration
 
 API and path defaults live in `settings.json` and are loaded by `config.SettingsStore`. Extend `AppSettings` and the Settings page when a global default should be shared by every plugin.

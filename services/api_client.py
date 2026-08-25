@@ -29,11 +29,14 @@ class BufferedAPIClient:
 
     def request(self, payload: dict[str, Any], previous_response: Any = None) -> Any:
         self.seed_buffer()
+        self.logger.info('api_request_started', extra={'event': 'api_request_started', 'url': self.api_url, 'script': payload.get('analysis_script'), 'clip': payload.get('$file')})
         try:
             response = self.session.post(self.api_url, json=payload, timeout=self.timeout)
         except requests.RequestException as error:
+            self.logger.warning('api_request_failed', extra={'event': 'api_request_failed', 'error': str(error)})
             raise APIProcessingError(f'API request failed: {error}') from error
         if response.status_code != 200:
+            self.logger.warning('api_request_failed', extra={'event': 'api_request_failed', 'status_code': response.status_code})
             raise APIProcessingError(f'API returned HTTP {response.status_code}: {response.text[:300]}')
 
         try:
@@ -45,6 +48,7 @@ class BufferedAPIClient:
             raise APIProcessingError('API returned an empty response or nothing. Pipeline stopped to protect the buffer state.')
         if self.is_duplicate(parsed, previous_response):
             raise APIProcessingError('Duplicate API response detected. Pipeline stopped to prevent repeated output.')
+        self.logger.info('api_request_completed', extra={'event': 'api_request_completed', 'script': payload.get('analysis_script'), 'clip': payload.get('$file')})
         return parsed
 
     @staticmethod

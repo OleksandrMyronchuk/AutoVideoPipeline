@@ -1,5 +1,5 @@
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
@@ -19,6 +19,7 @@ class AppSettings:
     analysis_skip_existing: bool = True
     analysis_request_timeout: int = 9999
     analysis_max_retries: int = 3
+    analysis_script_configs: dict[str, dict[str, object]] = field(default_factory=dict)
     last_page: str = 'cut'
 
 
@@ -51,6 +52,7 @@ class SettingsStore:
             analysis_skip_existing=bool(values.get('analysis_skip_existing', defaults.analysis_skip_existing)),
             analysis_request_timeout=self._duration(values.get('analysis_request_timeout', defaults.analysis_request_timeout), defaults.analysis_request_timeout),
             analysis_max_retries=self._duration(values.get('analysis_max_retries', defaults.analysis_max_retries), defaults.analysis_max_retries),
+            analysis_script_configs=values.get('analysis_script_configs', {}) if isinstance(values.get('analysis_script_configs', {}), dict) else {},
             last_page=last_page,
         )
 

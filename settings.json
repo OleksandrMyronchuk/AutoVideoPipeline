@@ -13,5 +13,6 @@
   "analysis_skip_existing": true,
   "analysis_request_timeout": 9999,
   "analysis_max_retries": 3,
+  "analysis_script_configs": {},
   "last_page": "analyze"
 }

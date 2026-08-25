@@ -8,12 +8,13 @@ from nicegui import ui
 
 from config import SettingsStore
 from interface import VideoPipelineUI
+from services.logging_utils import PipelineFormatter
 
 
 log_dir = Path(__file__).with_name('.script_workspaces')
 log_dir.mkdir(parents=True, exist_ok=True)
 file_handler = logging.FileHandler(log_dir / 'script_editor.log', encoding='utf-8')
-file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s'))
+file_handler.setFormatter(PipelineFormatter())
 logging.getLogger().addHandler(file_handler)
 logging.getLogger().setLevel(logging.INFO)
 

@@ -6,10 +6,12 @@ from uuid import UUID, uuid4
 from nicegui import run, ui
 
 from config import AppSettings, SettingsStore
+from plugins.base import ScriptConfig
 from plugins.registry import ScriptRegistry
 from services.analysis_runner import AnalysisRunner
 from services.api_client import APIProcessingError, BufferedAPIClient
 from services.file_system_provider import FileSystemProvider
+from services.logging_utils import get_pipeline_logger
 from video_processor import VideoProcessor
 
 
@@ -149,7 +151,9 @@ class VideoPipelineUI:
                             ui.label(script.name).classes('text-white text-lg font-semibold')
                             ui.label(script.description).classes('muted')
                         with ui.row().classes('items-center gap-1'):
-                            ui.button('Edit', icon='edit', on_click=lambda item=script: self.open_script(item)).props('flat')
+                            ui.button('Configure & Run', icon='play_arrow', on_click=lambda item=script: self.open_script(item)).props('unelevated').classes('bg-orange-600 text-white')
+                            ui.button('Read', icon='menu_book', on_click=lambda item=script: self.show_prompt(item, None)).props('flat')
+                            ui.button('Edit', icon='edit', on_click=lambda item=script: self.open_editor(item)).props('flat')
                             if script.workspace_root:
                                 ui.button('Rename', icon='drive_file_rename_outline', on_click=lambda item=script: self.open_rename_script(item)).props('flat')
                                 ui.button('Delete', icon='delete', on_click=lambda item=script: self.confirm_delete_script(item)).props('flat color=negative')
@@ -193,10 +197,60 @@ class VideoPipelineUI:
         dialog.open()
 
     def open_script(self, script):
-        self.open_editor(script)
+        saved = self.settings.analysis_script_configs.get(script.key, {})
+        configs = list(script.configs)
+        shared_configs = (
+            ScriptConfig('input_dir', 'Input clips folder', 'Folder containing video clips to analyze.', self.settings.analysis_clips_dir),
+            ScriptConfig('output_dir', 'Output folder', 'Folder where analysis JSON files are written.', self.settings.analysis_output_dir),
+            ScriptConfig('request_file', 'Prompt file', 'Optional file containing an extra prompt template.', self.settings.analysis_request_file),
+            ScriptConfig('workflow_path', 'Workflow path', 'Workflow path sent to the API.', self.settings.analysis_workflow_path),
+            ScriptConfig('skip_existing', 'Skip existing outputs', 'Do not send clips that already have an output JSON.', self.settings.analysis_skip_existing, 'boolean'),
+        )
+        declared_keys = {config.key for config in configs}
+        configs.extend(config for config in shared_configs if config.key not in declared_keys)
+        with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(760px,94vw)] p-6'):
+            ui.label(script.name).classes('text-2xl font-semibold')
+            ui.label(script.description).classes('muted mt-1')
+            ui.textarea(value=self.registry.prompt_text(script)).props('readonly outlined').classes('w-full mt-4')
+            fields = {}
+            with ui.column().classes('w-full gap-3 mt-4'):
+                for config in configs:
+                    value = config.value_for(saved, self.default_config_value(config.key))
+                    if config.kind == 'boolean':
+                        fields[config.key] = ui.checkbox(config.name, value=bool(value))
+                    elif config.kind == 'number':
+                        fields[config.key] = ui.number(config.name, value=value, step=1).classes('w-full')
+                    else:
+                        fields[config.key] = ui.input(config.name, value='' if value is None else str(value)).classes('w-full')
+                    ui.label(config.description).classes('muted text-xs -mt-2')
+
+            async def run_script():
+                values = {key: field.value for key, field in fields.items()}
+                missing = [config.name for config in configs if config.value_for(values) in (None, '')]
+                if missing:
+                    ui.notify(f'Required fields: {", ".join(missing)}', type='negative')
+                    return
+                self.settings.analysis_script_configs[script.key] = values
+                self.settings_store.save(self.settings)
+                await self.run_analysis(script, fields, None, dialog)
+
+            with ui.row().classes('w-full justify-end gap-2 mt-5'):
+                ui.button('Cancel', on_click=dialog.close).props('flat')
+                ui.button('Run analysis', icon='play_arrow', on_click=run_script).props('unelevated').classes('bg-orange-600 text-white')
+        dialog.open()
+
+    def default_config_value(self, key):
+        return {
+            'input_dir': self.settings.analysis_clips_dir,
+            'output_dir': self.settings.analysis_output_dir,
+            'request_file': self.settings.analysis_request_file,
+            'workflow_path': self.settings.analysis_workflow_path,
+            'skip_existing': self.settings.analysis_skip_existing,
+        }.get(key)
 
     def show_prompt(self, script, parent_dialog):
-        parent_dialog.close()
+        if parent_dialog:
+            parent_dialog.close()
         with ui.dialog() as dialog, ui.card().classes('bg-slate-800 text-white w-[min(720px,90vw)] p-6'):
             ui.label(f'{script.name} prompt').classes('text-2xl font-semibold')
             ui.textarea(value=self.registry.prompt_text(script)).props('readonly outlined').classes('w-full mt-5')
@@ -626,9 +680,12 @@ class VideoPipelineUI:
             input_dir = Path(fields['input_dir'].value)
             output_dir = Path(fields['output_dir'].value)
             request_file = Path(fields['request_file'].value)
+            config = {key: field.value for key, field in fields.items()}
             client = BufferedAPIClient(self.settings.analysis_api_url, self.settings.analysis_request_timeout, self.settings.analysis_max_retries)
             runner = AnalysisRunner(client)
-            result = await run.io_bound(runner.run, script, input_dir, output_dir, fields['workflow_path'].value, request_file, fields['skip_existing'].value)
+            pipeline_logger = get_pipeline_logger('analysis', script=script.key)
+            pipeline_logger.event('analysis_requested', input_dir=str(input_dir), output_dir=str(output_dir))
+            result = await run.io_bound(runner.run, script, config, pipeline_logger)
             self.log.push(result)
             ui.notify('Analysis complete', type='positive')
         except (APIProcessingError, OSError, ValueError) as error:
