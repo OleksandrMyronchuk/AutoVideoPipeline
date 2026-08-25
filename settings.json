@@ -12,5 +12,6 @@
   "analysis_request_file": "A:\\requests\\request1.txt",
   "analysis_skip_existing": true,
   "analysis_request_timeout": 9999,
-  "analysis_max_retries": 3
+  "analysis_max_retries": 3,
+  "last_page": "analyze"
 }

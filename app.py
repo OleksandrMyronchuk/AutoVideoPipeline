@@ -23,12 +23,12 @@ nicegui_app.add_static_files('/monaco', Path(__file__).with_name('node_modules')
 def build_page(page):
 	settings_store = SettingsStore(Path(__file__).with_name('settings.json'))
 	app = VideoPipelineUI(settings_store)
-	app.build(page)
+	app.build(page or settings_store.load().last_page)
 
 
 @ui.page('/')
 def index_page():
-	build_page('cut')
+	build_page(None)
 
 
 @ui.page('/cut_video')

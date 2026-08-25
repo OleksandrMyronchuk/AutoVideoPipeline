@@ -19,6 +19,7 @@ class AppSettings:
     analysis_skip_existing: bool = True
     analysis_request_timeout: int = 9999
     analysis_max_retries: int = 3
+    last_page: str = 'cut'
 
 
 class SettingsStore:
@@ -32,6 +33,9 @@ class SettingsStore:
             return AppSettings()
 
         defaults = AppSettings()
+        last_page = values.get('last_page', defaults.last_page)
+        if not isinstance(last_page, str) or last_page not in {'cut', 'analyze', 'settings'}:
+            last_page = defaults.last_page
         return AppSettings(
             input_path=values.get('input_path', defaults.input_path),
             output_path=values.get('output_path', defaults.output_path),
@@ -47,6 +51,7 @@ class SettingsStore:
             analysis_skip_existing=bool(values.get('analysis_skip_existing', defaults.analysis_skip_existing)),
             analysis_request_timeout=self._duration(values.get('analysis_request_timeout', defaults.analysis_request_timeout), defaults.analysis_request_timeout),
             analysis_max_retries=self._duration(values.get('analysis_max_retries', defaults.analysis_max_retries), defaults.analysis_max_retries),
+            last_page=last_page,
         )
 
     def save(self, settings: AppSettings) -> None:

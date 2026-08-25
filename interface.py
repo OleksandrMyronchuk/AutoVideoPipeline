@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 class VideoPipelineUI:
+    VALID_PAGES = {'cut', 'analyze', 'settings'}
+
     def __init__(self, settings_store: SettingsStore):
         self.settings_store = settings_store
         self.settings = settings_store.load()
@@ -27,6 +29,9 @@ class VideoPipelineUI:
         self.pages = {}
 
     def build(self, initial_page='cut'):
+        initial_page = initial_page if initial_page in self.VALID_PAGES else 'cut'
+        self.settings.last_page = initial_page
+        self.settings_store.save(self.settings)
         ui.colors(primary='#f97316', secondary='#202d43', accent='#fb923c', dark='#111827')
         ui.add_head_html('''
             <style>
@@ -67,7 +72,13 @@ class VideoPipelineUI:
 
     def nav_button(self, icon, label, page):
         route = f'/{page}_video' if page != 'settings' else '/settings'
-        ui.button(label, icon=icon, on_click=lambda: ui.navigate.to(route)).props('flat align=left').classes('w-full text-slate-300 justify-start')
+        ui.button(label, icon=icon, on_click=lambda: self.navigate_to_page(page, route)).props('flat align=left').classes('w-full text-slate-300 justify-start')
+
+    def navigate_to_page(self, page, route):
+        if page in self.VALID_PAGES:
+            self.settings.last_page = page
+            self.settings_store.save(self.settings)
+        ui.navigate.to(route)
 
     def page_header(self, title, subtitle):
         ui.label(title).classes('text-white text-4xl font-semibold')

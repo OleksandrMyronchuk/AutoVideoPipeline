@@ -21,7 +21,7 @@ Install the optional bundled FFmpeg helper first if needed:
 
 The app can also use an FFmpeg installation available on your `PATH`, or a custom executable selected in **Settings**.
 
-Change the source path, output folder, FFmpeg executable, or clip duration in **Settings**, then click **Save settings**. Those values are written back to `settings.json` and loaded the next time the app starts.
+Change the source path, output folder, FFmpeg executable, or clip duration in **Settings**, then click **Save settings**. Those values are written back to `settings.json` and loaded the next time the app starts. The app also remembers the last main page and restores it when you reopen the project.
 
 ## Project structure
 
