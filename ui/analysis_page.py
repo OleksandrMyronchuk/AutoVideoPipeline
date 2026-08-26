@@ -16,6 +16,7 @@ class AnalysisPageMixin:
             with ui.row().classes('w-full items-center justify-between mb-4'):
                 ui.label('AVAILABLE SCRIPTS').classes('muted text-xs font-semibold tracking-wider')
                 ui.button('Add script', icon='add', on_click=self.open_script_menu).props('outline')
+
             ui.add_head_html('''
                 <style>
                     .script-card { transition: opacity .18s ease, transform .18s ease, border-color .18s ease; }
@@ -23,17 +24,25 @@ class AnalysisPageMixin:
                     .script-drag-handle { cursor: grab; color: #93a4bd; user-select: none; }
                     .script-drag-handle:active { cursor: grabbing; }
                     .script-drop-zone { height: 8px; border: 1px dashed transparent; border-radius: 4px; transition: height .18s ease, border-color .18s ease, background .18s ease; }
-                    .script-drop-zone.is-visible { height: 30px; border-color: #fb923c; background: rgba(249, 115, 22, .12); }
+                    .script-drop-zone.is-visible { height: 28px; border-color: #fb923c; background: rgba(249, 115, 22, .12); }
                     .script-drop-zone.is-over { background: rgba(249, 115, 22, .28); box-shadow: 0 0 0 1px rgba(251, 146, 60, .4); }
                 </style>
             ''')
-            self.script_reorder_bridge = ui.element('div').classes('hidden')
-            reorder_bridge_id = self.script_reorder_bridge.id
+
             ui.add_body_html('''
                 <script>
                     (() => {
+                        if (window.__avpDragDropInitialized) return;
+                        window.__avpDragDropInitialized = true;
+
                         let draggedKey = null;
-                        const clearDropZones = () => document.querySelectorAll('.script-drop-zone').forEach(zone => zone.classList.remove('is-visible', 'is-over'));
+
+                        const clearDropZones = () => {
+                            document.querySelectorAll('.script-drop-zone').forEach(zone => {
+                                zone.classList.remove('is-visible', 'is-over');
+                            });
+                        };
+
                         document.addEventListener('dragstart', (event) => {
                             const handle = event.target.closest('.script-drag-handle');
                             if (!handle) return;
@@ -44,50 +53,76 @@ class AnalysisPageMixin:
                             event.dataTransfer.effectAllowed = 'move';
                             event.dataTransfer.setData('text/plain', draggedKey);
                         });
+
                         document.addEventListener('dragover', (event) => {
                             if (!draggedKey) return;
                             event.preventDefault();
                             event.dataTransfer.dropEffect = 'move';
-                            const zone = event.target.closest('.script-drop-zone');
+
                             document.querySelectorAll('.script-drop-zone').forEach(item => item.classList.remove('is-over'));
-                            if (zone) { zone.classList.add('is-over'); return; }
+
+                            const zone = event.target.closest('.script-drop-zone');
+                            if (zone) {
+                                zone.classList.add('is-over');
+                                return;
+                            }
+
                             const card = event.target.closest('.script-card');
                             if (card) {
                                 const bounds = card.getBoundingClientRect();
-                                const index = [...document.querySelectorAll('.script-card')].indexOf(card);
-                                document.querySelector(`.script-drop-zone[data-drop-index="${event.clientY < bounds.top + bounds.height / 2 ? index : index + 1}"]`)?.classList.add('is-over');
+                                const cards = [...document.querySelectorAll('.script-card')];
+                                const index = cards.indexOf(card);
+                                const dropIndex = event.clientY < (bounds.top + bounds.height / 2) ? index : index + 1;
+                                document.querySelector(`.script-drop-zone[data-drop-index="${dropIndex}"]`)?.classList.add('is-over');
                             }
                         });
+
                         document.addEventListener('drop', (event) => {
                             if (!draggedKey) return;
                             event.preventDefault();
-                            const order = [...document.querySelectorAll('.script-card')].map(card => card.dataset.scriptKey);
+
+                            const cards = [...document.querySelectorAll('.script-card')];
+                            const order = cards.map(c => c.dataset.scriptKey);
                             const from = order.indexOf(draggedKey);
+
                             const zone = event.target.closest('.script-drop-zone');
                             let insertionIndex = zone ? Number(zone.dataset.dropIndex) : NaN;
+
                             const card = event.target.closest('.script-card');
                             if (!Number.isInteger(insertionIndex) && card) {
                                 const bounds = card.getBoundingClientRect();
-                                const index = order.indexOf(card.dataset.scriptKey);
-                                insertionIndex = event.clientY < bounds.top + bounds.height / 2 ? index : index + 1;
+                                const index = cards.indexOf(card);
+                                insertionIndex = event.clientY < (bounds.top + bounds.height / 2) ? index : index + 1;
                             }
-                            if (from < 0 || !Number.isInteger(insertionIndex)) return;
-                            order.splice(from, 1);
-                            order.splice(insertionIndex - (from < insertionIndex ? 1 : 0), 0, draggedKey);
-                            document.getElementById('c' + __BRIDGE_ID__).dispatchEvent(new CustomEvent('scriptReorder', {detail: {order}, bubbles: false}));
-                            document.querySelectorAll('.script-card').forEach(card => card.classList.remove('is-dragging'));
+
+                            document.querySelectorAll('.script-card').forEach(c => c.classList.remove('is-dragging'));
                             clearDropZones();
+
+                            const movingKey = draggedKey;
                             draggedKey = null;
+
+                            if (from < 0 || !Number.isInteger(insertionIndex)) return;
+                            if (insertionIndex === from || insertionIndex === from + 1) return;
+
+                            order.splice(from, 1);
+                            const targetIndex = insertionIndex > from ? insertionIndex - 1 : insertionIndex;
+                            order.splice(targetIndex, 0, movingKey);
+
+                            if (typeof emitEvent === 'function') {
+                                emitEvent('script_reorder', {order: order});
+                            }
                         });
+
                         document.addEventListener('dragend', () => {
-                            document.querySelectorAll('.script-card').forEach(card => card.classList.remove('is-dragging'));
+                            document.querySelectorAll('.script-card').forEach(c => c.classList.remove('is-dragging'));
                             clearDropZones();
                             draggedKey = null;
                         });
                     })();
                 </script>
-            '''.replace('__BRIDGE_ID__', str(reorder_bridge_id)))
-            self.script_reorder_bridge.on('script-reorder', self.reorder_scripts, js_handler='(event) => emit(event.detail)')
+            ''')
+
+            ui.on('script_reorder', self.reorder_scripts)
             self.script_list = ui.column().classes('w-full gap-3')
             self.render_script_list()
 
@@ -124,7 +159,16 @@ class AnalysisPageMixin:
         return [scripts[key] for key in order]
 
     def reorder_scripts(self, event):
-        order = event.args.get('order', [])
+        args = getattr(event, 'args', event)
+        if isinstance(args, dict):
+            order = args.get('order', [])
+        elif isinstance(args, list) and args and isinstance(args[0], dict):
+            order = args[0].get('order', [])
+        elif isinstance(args, list):
+            order = args
+        else:
+            order = []
+
         available = {script.key for script in self.registry.all()}
         if not isinstance(order, list) or not all(isinstance(key, str) for key in order):
             return

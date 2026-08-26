@@ -3,26 +3,22 @@ import logging
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from nicegui import run, ui
+from nicegui import ui
 
 from config import AppSettings, SettingsStore
 from plugins.base import ScriptConfig
 from plugins.registry import ScriptRegistry
-from services.api_client import APIProcessingError
 from services.file_system_provider import FileSystemProvider
-from services.logging_utils import get_pipeline_logger
-from services.pipeline_service import PipelineService
+from ui.analysis_page import AnalysisPageMixin
 from ui.cut_page import CutPageMixin
 from ui.navigation import NavigationMixin
 from ui.settings_page import SettingsPageMixin
-from ui.analysis_page import AnalysisPageMixin
 
 
 logger = logging.getLogger(__name__)
 
 
 class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, CutPageMixin):
-
     def __init__(self, settings_store: SettingsStore):
         self.settings_store = settings_store
         self.settings = settings_store.load()
@@ -31,190 +27,6 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
         self.file_system = FileSystemProvider(self.editor_workspace)
         self.running = False
         self.pages = {}
-
-    def _legacy_build_analyze_page(self):
-        with ui.column().classes('w-full max-w-5xl gap-0') as page:
-            self.pages['analyze'] = page
-            self.page_header('Analyze Video', 'Choose an analysis script and configure its inputs before running.')
-            with ui.row().classes('w-full items-center justify-between mb-4'):
-                ui.label('AVAILABLE SCRIPTS').classes('muted text-xs font-semibold tracking-wider')
-                ui.button('Add script', icon='add', on_click=self.open_script_menu).props('outline')
-            ui.add_head_html('''
-                <style>
-                    .script-card { transition: opacity .18s ease, transform .18s ease, border-color .18s ease; }
-                    .script-card.is-dragging { opacity: .42; transform: scale(.985); }
-                    .script-drag-handle { cursor: grab; color: #93a4bd; user-select: none; }
-                    .script-drag-handle:active { cursor: grabbing; }
-                    .script-drop-zone { height: 8px; border: 1px dashed transparent; border-radius: 4px; transition: height .18s ease, border-color .18s ease, background .18s ease; }
-                    .script-drop-zone.is-visible { height: 30px; border-color: #fb923c; background: rgba(249, 115, 22, .12); }
-                    .script-drop-zone.is-over { background: rgba(249, 115, 22, .28); box-shadow: 0 0 0 1px rgba(251, 146, 60, .4); }
-                </style>
-            ''')
-            self.script_reorder_bridge = ui.element('div').classes('hidden')
-            reorder_bridge_id = self.script_reorder_bridge.id
-            ui.add_body_html('''
-                <script>
-                    (() => {
-                        let draggedKey = null;
-                        const clearDropZones = () => document.querySelectorAll('.script-drop-zone').forEach(zone => zone.classList.remove('is-visible', 'is-over'));
-                        document.addEventListener('dragstart', (event) => {
-                            const handle = event.target.closest('.script-drag-handle');
-                            if (!handle) return;
-                            draggedKey = handle.dataset.scriptKey;
-                            const card = document.querySelector(`.script-card[data-script-key="${CSS.escape(draggedKey)}"]`);
-                            if (card) card.classList.add('is-dragging');
-                            document.querySelectorAll('.script-drop-zone').forEach(zone => zone.classList.add('is-visible'));
-                            event.dataTransfer.effectAllowed = 'move';
-                            event.dataTransfer.setData('text/plain', draggedKey);
-                        });
-                        document.addEventListener('dragover', (event) => {
-                            if (!draggedKey) return;
-                            event.preventDefault();
-                            event.dataTransfer.dropEffect = 'move';
-                            const zone = event.target.closest('.script-drop-zone');
-                            document.querySelectorAll('.script-drop-zone').forEach(item => item.classList.remove('is-over'));
-                            if (zone) {
-                                zone.classList.add('is-over');
-                                return;
-                            }
-                            const card = event.target.closest('.script-card');
-                            if (card) {
-                                const bounds = card.getBoundingClientRect();
-                                const index = [...document.querySelectorAll('.script-card')].indexOf(card);
-                                document.querySelector(`.script-drop-zone[data-drop-index="${event.clientY < bounds.top + bounds.height / 2 ? index : index + 1}"]`)?.classList.add('is-over');
-                            }
-                        });
-                        document.addEventListener('drop', (event) => {
-                            if (!draggedKey) return;
-                            event.preventDefault();
-                            const order = [...document.querySelectorAll('.script-card')].map(card => card.dataset.scriptKey);
-                            const from = order.indexOf(draggedKey);
-                            const zone = event.target.closest('.script-drop-zone');
-                            let insertionIndex = zone ? Number(zone.dataset.dropIndex) : NaN;
-                            const card = event.target.closest('.script-card');
-                            if (!Number.isInteger(insertionIndex) && card) {
-                                const bounds = card.getBoundingClientRect();
-                                const index = order.indexOf(card.dataset.scriptKey);
-                                insertionIndex = event.clientY < bounds.top + bounds.height / 2 ? index : index + 1;
-                            }
-                            if (from < 0 || !Number.isInteger(insertionIndex)) return;
-                            order.splice(from, 1);
-                            order.splice(insertionIndex - (from < insertionIndex ? 1 : 0), 0, draggedKey);
-                            document.getElementById('c' + __BRIDGE_ID__).dispatchEvent(new CustomEvent('scriptReorder', {detail: {order}, bubbles: false}));
-                            document.querySelectorAll('.script-card').forEach(card => card.classList.remove('is-dragging'));
-                            clearDropZones();
-                            draggedKey = null;
-                        });
-                        document.addEventListener('dragend', () => {
-                            document.querySelectorAll('.script-card').forEach(card => card.classList.remove('is-dragging'));
-                            clearDropZones();
-                            draggedKey = null;
-                        });
-                    })();
-                </script>
-            '''.replace('__BRIDGE_ID__', str(reorder_bridge_id)))
-            self.script_reorder_bridge.on('script-reorder', self.reorder_scripts, js_handler='(event) => emit(event.detail)')
-            self.script_list = ui.column().classes('w-full gap-3')
-            self.render_script_list()
-
-    def _legacy_render_script_list(self):
-        self.script_list.clear()
-        scripts = self.ordered_scripts()
-        with self.script_list:
-            for index, script in enumerate(scripts):
-                ui.element('div').props(f'data-drop-index="{index}"').classes('script-drop-zone')
-                with ui.card().props(f'data-script-key="{script.key}"').classes('script-card nicegui-card w-full border border-slate-600 p-4'):
-                    with ui.row().classes('w-full items-center justify-between'):
-                        with ui.row().classes('items-center gap-3 min-w-0'):
-                            ui.icon('drag_indicator').props(f'draggable=true data-script-key="{script.key}"').classes('script-drag-handle shrink-0')
-                            with ui.column().classes('gap-1 min-w-0'):
-                                ui.label(script.name).classes('text-white text-lg font-semibold')
-                                ui.label(script.description).classes('muted')
-                        with ui.row().classes('items-center gap-1'):
-                            ui.button('Configure & Run', icon='play_arrow', on_click=lambda item=script: self.open_script(item)).props('unelevated').classes('bg-orange-600 text-white')
-                            ui.button('Read', icon='menu_book', on_click=lambda item=script: self.show_prompt(item, None)).props('flat')
-                            ui.button('Edit', icon='edit', on_click=lambda item=script: self.open_editor(item)).props('flat')
-                            if script.workspace_root:
-                                ui.button('Rename', icon='drive_file_rename_outline', on_click=lambda item=script: self.open_rename_script(item)).props('flat')
-                                ui.button('Delete', icon='delete', on_click=lambda item=script: self.confirm_delete_script(item)).props('flat color=negative')
-            ui.element('div').props(f'data-drop-index="{len(scripts)}"').classes('script-drop-zone')
-
-    def _legacy_ordered_scripts(self):
-        scripts = {script.key: script for script in self.registry.all()}
-        saved_order = [key for key in self.settings.analysis_script_order if key in scripts]
-        new_keys = [key for key in scripts if key not in saved_order]
-        order = saved_order + new_keys
-        if order != self.settings.analysis_script_order:
-            self.settings.analysis_script_order = order
-            self.settings_store.save(self.settings)
-        return [scripts[key] for key in order]
-
-    def _legacy_reorder_scripts(self, event):
-        order = event.args.get('order', [])
-        available = {script.key for script in self.registry.all()}
-        if not isinstance(order, list) or not all(isinstance(key, str) for key in order):
-            return
-        if set(order) != available or len(order) != len(available):
-            return
-        self.settings.analysis_script_order = order
-        self.settings_store.save(self.settings)
-        self.render_script_list()
-
-    def _legacy_open_rename_script(self, script):
-        with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(560px,92vw)] p-5'):
-            ui.label('Rename script').classes('text-xl font-semibold')
-            name_input = ui.input('Script name', value=script.name).classes('w-full mt-4')
-
-            def rename():
-                try:
-                    self.registry.rename(script, name_input.value or '')
-                    self.render_script_list()
-                    dialog.close()
-                    ui.notify('Script renamed', type='positive')
-                except (OSError, ValueError) as error:
-                    ui.notify(str(error), type='negative')
-
-            with ui.row().classes('w-full justify-end gap-2 mt-4'):
-                ui.button('Cancel', on_click=dialog.close).props('flat')
-                ui.button('Rename', on_click=rename).props('unelevated').classes('bg-orange-600 text-white')
-        dialog.open()
-
-    def _legacy_confirm_delete_script(self, script):
-        with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(560px,92vw)] p-5'):
-            ui.label(f'Delete {script.name}?').classes('text-xl font-semibold')
-            ui.label('This permanently removes the script workspace and its files.').classes('muted mt-2')
-
-            def delete():
-                try:
-                    self.registry.delete(script)
-                    self.render_script_list()
-                    dialog.close()
-                    ui.notify('Script deleted', type='positive')
-                except (OSError, ValueError) as error:
-                    ui.notify(str(error), type='negative')
-
-            with ui.row().classes('w-full justify-end gap-2 mt-4'):
-                ui.button('Cancel', on_click=dialog.close).props('flat')
-                ui.button('Delete', on_click=delete).props('unelevated color=negative')
-        dialog.open()
-
-    def _legacy_default_config_value(self, key):
-        return {
-            'input_dir': self.settings.analysis_clips_dir,
-            'output_dir': self.settings.analysis_output_dir,
-            'request_file': self.settings.analysis_request_file,
-            'workflow_path': self.settings.analysis_workflow_path,
-            'skip_existing': self.settings.analysis_skip_existing,
-        }.get(key)
-
-    def _legacy_show_prompt(self, script, parent_dialog):
-        if parent_dialog:
-            parent_dialog.close()
-        with ui.dialog() as dialog, ui.card().classes('bg-slate-800 text-white w-[min(720px,90vw)] p-6'):
-            ui.label(f'{script.name} prompt').classes('text-2xl font-semibold')
-            ui.textarea(value=self.registry.prompt_text(script)).props('readonly outlined').classes('w-full mt-5')
-            ui.button('Close', on_click=dialog.close).props('flat').classes('mt-4')
-        dialog.open()
 
     def open_script_menu(self):
         with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(900px,94vw)] p-6'):
@@ -341,6 +153,7 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
                     ui.button('Save', icon='save', on_click=lambda: self.save_active_editor(editor_id)).props('unelevated').classes('bg-orange-600 text-white self-start mb-2')
                     editor_container = ui.html(f'<div id="{editor_id}" style="height:min(72vh, 720px);min-height:420px;max-height:80vh;width:100%;"></div>', sanitize=False).classes('editor-host w-full')
             ui.label('Changes save with Ctrl+S / Cmd+S.').classes('muted text-xs mt-3')
+
         ui.add_body_html('''
             <script>
                 window.avpEditors = window.avpEditors || {};
@@ -381,55 +194,6 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
     def open_editor(self, script=None, mode='edit'):
         workspace_id = script.workspace_root.name if script and script.workspace_root else uuid4().hex
         ui.run_javascript(f"window.open('/script_editor/{workspace_id}', '_blank', 'noopener,noreferrer')")
-        return
-
-        plugin_dir = Path(__file__).with_name('plugins')
-        prompt_dir = Path(__file__).with_name('prompts')
-        editor_files = sorted([f'plugins/{path.name}' for path in plugin_dir.glob('*.py') if path.stem not in {'__init__', 'base', 'builtin', 'registry'}] + [f'prompts/{path.name}' for path in prompt_dir.glob('*.txt')])
-        default_file = f'prompts/{Path(script.prompt_file).name}' if script else 'plugins/narration_dialogues.py'
-        if default_file not in editor_files:
-            editor_files.append(default_file)
-        editor_files = sorted(set(editor_files))
-        editor_id = f'script-editor-{id(self)}'
-        with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(1100px,96vw)] p-5'):
-            ui.label(f'Edit {script.name}' if script else 'Create a New Script').classes('text-2xl font-semibold')
-            with ui.row().classes('w-full items-stretch gap-4 mt-4'):
-                with ui.column().classes('w-64 shrink-0 bg-slate-900/60 p-3 rounded gap-1'):
-                    ui.label('FILE MANAGER').classes('muted text-xs font-semibold tracking-wider mb-2')
-                    file_buttons = {}
-                    for filename in editor_files:
-                        file_buttons[filename] = ui.button(filename, on_click=lambda name=filename: self.load_editor_file(name, editor_id)).props('flat align=left').classes('w-full justify-start text-slate-200 text-xs')
-                    ui.separator().classes('my-2')
-                    ui.button('New plugin file', icon='add', on_click=lambda: self.create_editor_file('plugins')).props('flat align=left').classes('w-full justify-start text-slate-300 text-xs')
-                    ui.button('New prompt file', icon='add', on_click=lambda: self.create_editor_file('prompts')).props('flat align=left').classes('w-full justify-start text-slate-300 text-xs')
-                editor_container = ui.html(f'<div id="{editor_id}" style="height:520px;width:100%;border:1px solid #475569"></div>', sanitize=False).classes('flex-1')
-            ui.add_head_html('''
-                <script src="/monaco/vs/loader.js"></script>
-                <script>
-                    window.avpEditors = window.avpEditors || {};
-                    function avpCreateEditor(id, value, path) {
-                        window.require.config({paths: {vs: '/monaco/vs'}});
-                        window.require(['vs/editor/editor.main'], function() {
-                            const editor = monaco.editor.create(document.getElementById(id), {value: value, language: 'python', theme: 'vs-dark', automaticLayout: true, minimap: {enabled: false}});
-                            window.avpEditors[id] = {instance: editor, path: path};
-                            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
-                                emitEvent('editor-save', {path: window.avpEditors[id].path, value: editor.getValue()});
-                            });
-                        });
-                    }
-                    function avpSetEditorFile(id, path, value) {
-                        if (window.avpEditors[id]) {
-                            window.avpEditors[id].path = path;
-                            window.avpEditors[id].instance.setValue(value);
-                        }
-                    }
-                </script>
-            ''')
-            ui.timer(0.5, lambda: ui.run_javascript(f'window.avpCreateEditor({editor_id!r}, {self.read_editor_file(default_file)!r}, {default_file!r})'), once=True)
-            editor_container.on('editor-save', self.save_editor_event)
-            ui.label('Use Ctrl+S / Cmd+S to save the active file.').classes('muted text-xs mt-3')
-            ui.button('Close', on_click=dialog.close).props('flat').classes('mt-2')
-        dialog.open()
 
     @staticmethod
     def editor_folder_paths(nodes):
@@ -634,41 +398,8 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
             ui.button('Close', on_click=dialog.close).props('flat').classes('mt-5')
         dialog.open()
 
-    async def _legacy_run_analysis(self, script, fields, prompt, dialog):
-        dialog.close()
-        try:
-            input_dir = Path(fields['input_dir'].value)
-            output_dir = Path(fields['output_dir'].value)
-            request_file = Path(fields['request_file'].value)
-            config = {key: field.value for key, field in fields.items()}
-            pipeline_logger = get_pipeline_logger('analysis', script=script.key)
-            pipeline_logger.event('analysis_requested', input_dir=str(input_dir), output_dir=str(output_dir))
-            service = PipelineService(self.settings.analysis_api_url, self.settings.analysis_request_timeout, self.settings.analysis_max_retries)
-            result = await run.io_bound(service.analyze, script, config, pipeline_logger)
-            self.log.push(result)
-            ui.notify('Analysis complete', type='positive')
-        except (APIProcessingError, OSError, ValueError) as error:
-            self.log.push(f'Analysis stopped: {error}')
-            ui.notify('Analysis stopped safely. See Activity for details.', type='negative')
-
 
 __all__ = ['VideoPipelineUI']
 
 
 _facade_ready = True
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
