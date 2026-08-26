@@ -23,8 +23,8 @@
     }
   },
   "analysis_script_order": [
-    "event_timeline",
-    "narration_dialogues"
+    "narration_dialogues",
+    "event_timeline"
   ],
   "last_page": "analyze"
 }

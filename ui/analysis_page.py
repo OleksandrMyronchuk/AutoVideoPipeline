@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from nicegui import run, ui
@@ -8,6 +9,9 @@ from services.logging_utils import get_pipeline_logger
 from services.pipeline_service import PipelineService
 
 
+logger = logging.getLogger(__name__)
+
+
 class AnalysisPageMixin:
     def build_analyze_page(self):
         with ui.column().classes('w-full max-w-5xl gap-0') as page:
@@ -16,7 +20,6 @@ class AnalysisPageMixin:
             with ui.row().classes('w-full items-center justify-between mb-4'):
                 ui.label('AVAILABLE SCRIPTS').classes('muted text-xs font-semibold tracking-wider')
                 ui.button('Add script', icon='add', on_click=self.open_script_menu).props('outline')
-
             ui.add_head_html('''
                 <style>
                     .script-card { transition: opacity .18s ease, transform .18s ease, border-color .18s ease; }
@@ -24,24 +27,25 @@ class AnalysisPageMixin:
                     .script-drag-handle { cursor: grab; color: #93a4bd; user-select: none; }
                     .script-drag-handle:active { cursor: grabbing; }
                     .script-drop-zone { height: 8px; border: 1px dashed transparent; border-radius: 4px; transition: height .18s ease, border-color .18s ease, background .18s ease; }
-                    .script-drop-zone.is-visible { height: 28px; border-color: #fb923c; background: rgba(249, 115, 22, .12); }
+                    .script-drop-zone.is-visible { height: 30px; border-color: #fb923c; background: rgba(249, 115, 22, .12); }
                     .script-drop-zone.is-over { background: rgba(249, 115, 22, .28); box-shadow: 0 0 0 1px rgba(251, 146, 60, .4); }
                 </style>
             ''')
-
+            
+            self.script_reorder_bridge = ui.element('div').classes('hidden')
+            reorder_bridge_id = self.script_reorder_bridge.id
+            
             ui.add_body_html('''
                 <script>
                     (() => {
+                        // Store the latest bridge ID safely against SPA navigation
+                        window.__avpReorderBridgeId = 'c' + __BRIDGE_ID__;
+                        
                         if (window.__avpDragDropInitialized) return;
                         window.__avpDragDropInitialized = true;
 
                         let draggedKey = null;
-
-                        const clearDropZones = () => {
-                            document.querySelectorAll('.script-drop-zone').forEach(zone => {
-                                zone.classList.remove('is-visible', 'is-over');
-                            });
-                        };
+                        const clearDropZones = () => document.querySelectorAll('.script-drop-zone').forEach(zone => zone.classList.remove('is-visible', 'is-over'));
 
                         document.addEventListener('dragstart', (event) => {
                             const handle = event.target.closest('.script-drag-handle');
@@ -58,71 +62,62 @@ class AnalysisPageMixin:
                             if (!draggedKey) return;
                             event.preventDefault();
                             event.dataTransfer.dropEffect = 'move';
-
-                            document.querySelectorAll('.script-drop-zone').forEach(item => item.classList.remove('is-over'));
-
                             const zone = event.target.closest('.script-drop-zone');
+                            document.querySelectorAll('.script-drop-zone').forEach(item => item.classList.remove('is-over'));
                             if (zone) {
                                 zone.classList.add('is-over');
                                 return;
                             }
-
                             const card = event.target.closest('.script-card');
                             if (card) {
                                 const bounds = card.getBoundingClientRect();
-                                const cards = [...document.querySelectorAll('.script-card')];
-                                const index = cards.indexOf(card);
-                                const dropIndex = event.clientY < (bounds.top + bounds.height / 2) ? index : index + 1;
-                                document.querySelector(`.script-drop-zone[data-drop-index="${dropIndex}"]`)?.classList.add('is-over');
+                                const index = [...document.querySelectorAll('.script-card')].indexOf(card);
+                                document.querySelector(`.script-drop-zone[data-drop-index="${event.clientY < bounds.top + bounds.height / 2 ? index : index + 1}"]`)?.classList.add('is-over');
                             }
                         });
 
                         document.addEventListener('drop', (event) => {
                             if (!draggedKey) return;
                             event.preventDefault();
-
-                            const cards = [...document.querySelectorAll('.script-card')];
-                            const order = cards.map(c => c.dataset.scriptKey);
+                            const order = [...document.querySelectorAll('.script-card')].map(card => card.dataset.scriptKey);
                             const from = order.indexOf(draggedKey);
-
                             const zone = event.target.closest('.script-drop-zone');
                             let insertionIndex = zone ? Number(zone.dataset.dropIndex) : NaN;
-
+                            
                             const card = event.target.closest('.script-card');
                             if (!Number.isInteger(insertionIndex) && card) {
                                 const bounds = card.getBoundingClientRect();
-                                const index = cards.indexOf(card);
-                                insertionIndex = event.clientY < (bounds.top + bounds.height / 2) ? index : index + 1;
+                                const index = order.indexOf(card.dataset.scriptKey);
+                                insertionIndex = event.clientY < bounds.top + bounds.height / 2 ? index : index + 1;
                             }
-
-                            document.querySelectorAll('.script-card').forEach(c => c.classList.remove('is-dragging'));
-                            clearDropZones();
-
-                            const movingKey = draggedKey;
-                            draggedKey = null;
-
                             if (from < 0 || !Number.isInteger(insertionIndex)) return;
-                            if (insertionIndex === from || insertionIndex === from + 1) return;
 
                             order.splice(from, 1);
-                            const targetIndex = insertionIndex > from ? insertionIndex - 1 : insertionIndex;
-                            order.splice(targetIndex, 0, movingKey);
+                            order.splice(insertionIndex - (from < insertionIndex ? 1 : 0), 0, draggedKey);
 
-                            if (typeof emitEvent === 'function') {
-                                emitEvent('script_reorder', {order: order});
+                            const bridge = document.getElementById(window.__avpReorderBridgeId);
+                            if (bridge) {
+                                // Must match the exact casing Vue natively registers (kebab-case)
+                                bridge.dispatchEvent(new CustomEvent('script-reorder', { detail: { order: order }, bubbles: false }));
                             }
+
+                            document.querySelectorAll('.script-card').forEach(card => card.classList.remove('is-dragging'));
+                            clearDropZones();
+                            draggedKey = null;
                         });
 
                         document.addEventListener('dragend', () => {
-                            document.querySelectorAll('.script-card').forEach(c => c.classList.remove('is-dragging'));
+                            document.querySelectorAll('.script-card').forEach(card => card.classList.remove('is-dragging'));
                             clearDropZones();
                             draggedKey = null;
                         });
                     })();
                 </script>
-            ''')
-
-            ui.on('script_reorder', self.reorder_scripts)
+            '''.replace('__BRIDGE_ID__', str(reorder_bridge_id)))
+            
+            # args=['detail'] instructs NiceGUI to safely unwrap the CustomEvent's detail field.
+            self.script_reorder_bridge.on('script-reorder', self.reorder_scripts, args=['detail'])
+            
             self.script_list = ui.column().classes('w-full gap-3')
             self.render_script_list()
 
@@ -159,21 +154,27 @@ class AnalysisPageMixin:
         return [scripts[key] for key in order]
 
     def reorder_scripts(self, event):
-        args = getattr(event, 'args', event)
-        if isinstance(args, dict):
-            order = args.get('order', [])
-        elif isinstance(args, list) and args and isinstance(args[0], dict):
-            order = args[0].get('order', [])
-        elif isinstance(args, list):
-            order = args
-        else:
-            order = []
-
+        order = []
+        try:
+            # Accommodates different payload unwrapping styles across NiceGUI versions
+            if hasattr(event, 'args'):
+                if isinstance(event.args, dict):
+                    if 'detail' in event.args and isinstance(event.args['detail'], dict):
+                        order = event.args['detail'].get('order', [])
+                    else:
+                        order = event.args.get('order', [])
+                elif isinstance(event.args, list) and event.args:
+                    if isinstance(event.args[0], dict) and 'order' in event.args[0]:
+                        order = event.args[0].get('order', [])
+        except Exception:
+            pass
+            
         available = {script.key for script in self.registry.all()}
         if not isinstance(order, list) or not all(isinstance(key, str) for key in order):
             return
         if set(order) != available or len(order) != len(available):
             return
+            
         self.settings.analysis_script_order = order
         self.settings_store.save(self.settings)
         self.render_script_list()
