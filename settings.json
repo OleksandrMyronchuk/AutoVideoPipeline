@@ -22,5 +22,9 @@
       "skip_existing": true
     }
   },
+  "analysis_script_order": [
+    "narration_dialogues",
+    "event_timeline"
+  ],
   "last_page": "analyze"
 }

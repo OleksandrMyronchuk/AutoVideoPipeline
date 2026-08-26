@@ -20,6 +20,7 @@ class AppSettings:
     analysis_request_timeout: int = 9999
     analysis_max_retries: int = 3
     analysis_script_configs: dict[str, dict[str, object]] = field(default_factory=dict)
+    analysis_script_order: list[str] = field(default_factory=list)
     last_page: str = 'cut'
 
 
@@ -53,6 +54,7 @@ class SettingsStore:
             analysis_request_timeout=self._duration(values.get('analysis_request_timeout', defaults.analysis_request_timeout), defaults.analysis_request_timeout),
             analysis_max_retries=self._duration(values.get('analysis_max_retries', defaults.analysis_max_retries), defaults.analysis_max_retries),
             analysis_script_configs=values.get('analysis_script_configs', {}) if isinstance(values.get('analysis_script_configs', {}), dict) else {},
+            analysis_script_order=[key for key in values.get('analysis_script_order', []) if isinstance(key, str)] if isinstance(values.get('analysis_script_order', []), list) else [],
             last_page=last_page,
         )
 
