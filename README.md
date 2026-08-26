@@ -26,9 +26,9 @@ Change the source path, output folder, FFmpeg executable, or clip duration in **
 ## Project structure
 
 - `app.py` is the VS Code Run entrypoint.
-- `interface.py` is the compatibility facade for the NiceGUI controller.
+- `interface.py` is the compatibility facade and state container for the NiceGUI controller.
 - `application/runtime.py` composes startup, route registration, logging, and static files.
-- `ui/` contains presentation concerns such as the cut-video page and shared theme.
+- `ui/` contains focused presentation mixins: navigation, settings, analysis, the cut-video page, and shared theme.
 - `config.py` loads and saves persistent configuration.
 - `video_processor.py` contains FFmpeg operations.
 - `services/pipeline_service.py` coordinates domain services without depending on NiceGUI.

@@ -12,15 +12,16 @@ from services.api_client import APIProcessingError
 from services.file_system_provider import FileSystemProvider
 from services.logging_utils import get_pipeline_logger
 from services.pipeline_service import PipelineService
-from ui.theme import configure_theme
 from ui.cut_page import CutPageMixin
+from ui.navigation import NavigationMixin
+from ui.settings_page import SettingsPageMixin
+from ui.analysis_page import AnalysisPageMixin
 
 
 logger = logging.getLogger(__name__)
 
 
-class VideoPipelineUI(CutPageMixin):
-    VALID_PAGES = {'cut', 'analyze', 'settings'}
+class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, CutPageMixin):
 
     def __init__(self, settings_store: SettingsStore):
         self.settings_store = settings_store
@@ -31,67 +32,7 @@ class VideoPipelineUI(CutPageMixin):
         self.running = False
         self.pages = {}
 
-    def build(self, initial_page='cut'):
-        initial_page = initial_page if initial_page in self.VALID_PAGES else 'cut'
-        self.settings.last_page = initial_page
-        self.settings_store.save(self.settings)
-        configure_theme()
-        with ui.left_drawer(value=True).classes('app-sidebar w-64 p-5'):
-            ui.label('AVP').classes('bg-orange-600 text-white text-2xl font-black px-3 py-1 rounded-sm')
-            ui.label('AUTO VIDEO\nPIPELINE').classes('text-white text-lg font-semibold mt-4 mb-10 whitespace-pre-line')
-            self.nav_button('content_cut', 'Cut Video', 'cut')
-            self.nav_button('analytics', 'Analyze Video', 'analyze')
-            self.nav_button('settings', 'Settings', 'settings')
-            ui.space()
-            ui.label('LOCAL PROCESSING').classes('text-slate-500 text-xs font-semibold')
-
-        with ui.column().classes('w-full min-h-screen p-8 md:p-12 app-panel'):
-            self.build_cut_page()
-            self.build_analyze_page()
-            self.build_settings_page()
-        self.show_page(initial_page)
-
-    def nav_button(self, icon, label, page):
-        route = f'/{page}_video' if page != 'settings' else '/settings'
-        ui.button(label, icon=icon, on_click=lambda: self.navigate_to_page(page, route)).props('flat align=left').classes('w-full text-slate-300 justify-start')
-
-    def navigate_to_page(self, page, route):
-        if page in self.VALID_PAGES:
-            self.settings.last_page = page
-            self.settings_store.save(self.settings)
-        ui.navigate.to(route)
-
-    def page_header(self, title, subtitle):
-        ui.label(title).classes('text-white text-4xl font-semibold')
-        ui.label(subtitle).classes('muted mt-1 mb-8')
-
-    def build_settings_page(self):
-        with ui.column().classes('w-full max-w-5xl gap-0') as page:
-            self.pages['settings'] = page
-            self.page_header('Settings', 'Control where files come from and how the pipeline runs.')
-            self.settings_input_field = ui.input('Default source video', value=self.settings.input_path, on_change=self.update_input).classes('app-input w-full')
-            self.settings_output_field = ui.input('Default output folder', value=self.settings.output_path, on_change=self.update_output).classes('app-input w-full mt-4')
-            self.ffmpeg_field = ui.input('FFmpeg executable', value=self.settings.ffmpeg_path, on_change=self.update_ffmpeg).classes('app-input w-full')
-            ui.label('Use Auto-detect to prefer imageio-ffmpeg, then fall back to FFmpeg on PATH.').classes('muted text-sm mt-2')
-            self.settings_duration_field = ui.number('Default clip length (seconds)', value=self.settings.segment_duration, min=1, max=86400, step=1, on_change=self.update_duration).classes('app-input w-64 mt-7')
-            ui.label('ANALYZE VIDEO DEFAULTS').classes('muted text-xs font-semibold tracking-wider mt-8')
-            for key, label in (
-                ('analysis_api_url', 'Analysis API URL'),
-                ('analysis_workflow_path', 'Analysis workflow path'),
-                ('analysis_clips_dir', 'Analysis input clips folder'),
-                ('analysis_output_dir', 'Analysis output folder'),
-                ('analysis_request_dir', 'Analysis request folder'),
-                ('analysis_request_file', 'Analysis prompt file'),
-                ('analysis_state_file', 'Analysis checkpoint file'),
-            ):
-                ui.input(label, value=getattr(self.settings, key), on_change=lambda event, name=key: self.update_analysis_setting(name, event)).classes('app-input w-full mt-3')
-            with ui.row().classes('w-full gap-4 mt-3'):
-                ui.number('API timeout (seconds)', value=self.settings.analysis_request_timeout, min=1, step=1, on_change=lambda event: self.update_analysis_number('analysis_request_timeout', event)).classes('app-input flex-1')
-                ui.number('Maximum retries', value=self.settings.analysis_max_retries, min=0, step=1, on_change=lambda event: self.update_analysis_number('analysis_max_retries', event)).classes('app-input flex-1')
-            ui.checkbox('Skip existing analysis outputs', value=self.settings.analysis_skip_existing, on_change=lambda event: self.update_analysis_bool('analysis_skip_existing', event)).classes('mt-3')
-            ui.button('Save settings', icon='save', on_click=self.save_settings).props('unelevated').classes('bg-orange-600 text-white mt-7 px-5')
-
-    def build_analyze_page(self):
+    def _legacy_build_analyze_page(self):
         with ui.column().classes('w-full max-w-5xl gap-0') as page:
             self.pages['analyze'] = page
             self.page_header('Analyze Video', 'Choose an analysis script and configure its inputs before running.')
@@ -176,7 +117,7 @@ class VideoPipelineUI(CutPageMixin):
             self.script_list = ui.column().classes('w-full gap-3')
             self.render_script_list()
 
-    def render_script_list(self):
+    def _legacy_render_script_list(self):
         self.script_list.clear()
         scripts = self.ordered_scripts()
         with self.script_list:
@@ -198,7 +139,7 @@ class VideoPipelineUI(CutPageMixin):
                                 ui.button('Delete', icon='delete', on_click=lambda item=script: self.confirm_delete_script(item)).props('flat color=negative')
             ui.element('div').props(f'data-drop-index="{len(scripts)}"').classes('script-drop-zone')
 
-    def ordered_scripts(self):
+    def _legacy_ordered_scripts(self):
         scripts = {script.key: script for script in self.registry.all()}
         saved_order = [key for key in self.settings.analysis_script_order if key in scripts]
         new_keys = [key for key in scripts if key not in saved_order]
@@ -208,7 +149,7 @@ class VideoPipelineUI(CutPageMixin):
             self.settings_store.save(self.settings)
         return [scripts[key] for key in order]
 
-    def reorder_scripts(self, event):
+    def _legacy_reorder_scripts(self, event):
         order = event.args.get('order', [])
         available = {script.key for script in self.registry.all()}
         if not isinstance(order, list) or not all(isinstance(key, str) for key in order):
@@ -219,7 +160,7 @@ class VideoPipelineUI(CutPageMixin):
         self.settings_store.save(self.settings)
         self.render_script_list()
 
-    def open_rename_script(self, script):
+    def _legacy_open_rename_script(self, script):
         with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(560px,92vw)] p-5'):
             ui.label('Rename script').classes('text-xl font-semibold')
             name_input = ui.input('Script name', value=script.name).classes('w-full mt-4')
@@ -238,7 +179,7 @@ class VideoPipelineUI(CutPageMixin):
                 ui.button('Rename', on_click=rename).props('unelevated').classes('bg-orange-600 text-white')
         dialog.open()
 
-    def confirm_delete_script(self, script):
+    def _legacy_confirm_delete_script(self, script):
         with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(560px,92vw)] p-5'):
             ui.label(f'Delete {script.name}?').classes('text-xl font-semibold')
             ui.label('This permanently removes the script workspace and its files.').classes('muted mt-2')
@@ -257,50 +198,7 @@ class VideoPipelineUI(CutPageMixin):
                 ui.button('Delete', on_click=delete).props('unelevated color=negative')
         dialog.open()
 
-    def open_script(self, script):
-        saved = self.settings.analysis_script_configs.get(script.key, {})
-        configs = list(script.configs)
-        shared_configs = (
-            ScriptConfig('input_dir', 'Input clips folder', 'Folder containing video clips to analyze.', self.settings.analysis_clips_dir),
-            ScriptConfig('output_dir', 'Output folder', 'Folder where analysis JSON files are written.', self.settings.analysis_output_dir),
-            ScriptConfig('request_file', 'Prompt file', 'Optional file containing an extra prompt template.', self.settings.analysis_request_file),
-            ScriptConfig('workflow_path', 'Workflow path', 'Workflow path sent to the API.', self.settings.analysis_workflow_path),
-            ScriptConfig('skip_existing', 'Skip existing outputs', 'Do not send clips that already have an output JSON.', self.settings.analysis_skip_existing, 'boolean'),
-        )
-        declared_keys = {config.key for config in configs}
-        configs.extend(config for config in shared_configs if config.key not in declared_keys)
-        with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(760px,94vw)] p-6'):
-            ui.label(script.name).classes('text-2xl font-semibold')
-            ui.label(script.description).classes('muted mt-1')
-            ui.textarea(value=self.registry.prompt_text(script)).props('readonly outlined').classes('w-full mt-4')
-            fields = {}
-            with ui.column().classes('w-full gap-3 mt-4'):
-                for config in configs:
-                    value = config.value_for(saved, self.default_config_value(config.key))
-                    if config.kind == 'boolean':
-                        fields[config.key] = ui.checkbox(config.name, value=bool(value))
-                    elif config.kind == 'number':
-                        fields[config.key] = ui.number(config.name, value=value, step=1).classes('w-full')
-                    else:
-                        fields[config.key] = ui.input(config.name, value='' if value is None else str(value)).classes('w-full')
-                    ui.label(config.description).classes('muted text-xs -mt-2')
-
-            async def run_script():
-                values = {key: field.value for key, field in fields.items()}
-                missing = [config.name for config in configs if config.value_for(values) in (None, '')]
-                if missing:
-                    ui.notify(f'Required fields: {", ".join(missing)}', type='negative')
-                    return
-                self.settings.analysis_script_configs[script.key] = values
-                self.settings_store.save(self.settings)
-                await self.run_analysis(script, fields, None, dialog)
-
-            with ui.row().classes('w-full justify-end gap-2 mt-5'):
-                ui.button('Cancel', on_click=dialog.close).props('flat')
-                ui.button('Run analysis', icon='play_arrow', on_click=run_script).props('unelevated').classes('bg-orange-600 text-white')
-        dialog.open()
-
-    def default_config_value(self, key):
+    def _legacy_default_config_value(self, key):
         return {
             'input_dir': self.settings.analysis_clips_dir,
             'output_dir': self.settings.analysis_output_dir,
@@ -309,7 +207,7 @@ class VideoPipelineUI(CutPageMixin):
             'skip_existing': self.settings.analysis_skip_existing,
         }.get(key)
 
-    def show_prompt(self, script, parent_dialog):
+    def _legacy_show_prompt(self, script, parent_dialog):
         if parent_dialog:
             parent_dialog.close()
         with ui.dialog() as dialog, ui.card().classes('bg-slate-800 text-white w-[min(720px,90vw)] p-6'):
@@ -736,7 +634,7 @@ class VideoPipelineUI(CutPageMixin):
             ui.button('Close', on_click=dialog.close).props('flat').classes('mt-5')
         dialog.open()
 
-    async def run_analysis(self, script, fields, prompt, dialog):
+    async def _legacy_run_analysis(self, script, fields, prompt, dialog):
         dialog.close()
         try:
             input_dir = Path(fields['input_dir'].value)
@@ -753,49 +651,24 @@ class VideoPipelineUI(CutPageMixin):
             self.log.push(f'Analysis stopped: {error}')
             ui.notify('Analysis stopped safely. See Activity for details.', type='negative')
 
-    def show_page(self, page_name):
-        for name, page in self.pages.items():
-            page.set_visibility(name == page_name)
 
-    def update_input(self, event):
-        self.update_input_value(event.value)
+__all__ = ['VideoPipelineUI']
 
-    def update_input_value(self, value):
-        self.settings.input_path = value
-        self.input_field.value = value
-        self.settings_input_field.value = value
 
-    def update_output(self, event):
-        self.update_output_value(event.value)
+_facade_ready = True
 
-    def update_output_value(self, value):
-        self.settings.output_path = value
-        self.output_field.value = value
-        self.settings_output_field.value = value
 
-    def update_ffmpeg(self, event):
-        self.settings.ffmpeg_path = event.value.strip() or 'Auto-detect'
-        self.engine_label.text = f'Engine: {self.settings.ffmpeg_path}'
 
-    def update_duration(self, event):
-        if event.value:
-            self.settings.segment_duration = int(event.value)
-            self.duration_field.value = self.settings.segment_duration
-            self.settings_duration_field.value = self.settings.segment_duration
 
-    def update_analysis_setting(self, name, event):
-        setattr(self.settings, name, event.value)
 
-    def update_analysis_number(self, name, event):
-        if event.value is not None:
-            setattr(self.settings, name, int(event.value))
 
-    def update_analysis_bool(self, name, event):
-        setattr(self.settings, name, bool(event.value))
 
-    def save_settings(self):
-        self.settings_store.save(self.settings)
-        self.status.text = 'Settings saved'
-        self.log.push('Settings updated.')
-        ui.notify('Settings saved')
+
+
+
+
+
+
+
+
 
