@@ -314,7 +314,8 @@ class VideoPipelineUI:
             self.file_system.write('prompts/my_prompt.txt', 'Analyze this video and return structured JSON.\n')
             logger.info('starter files created workspace_id=%s root=%s', workspace_id, self.editor_workspace.resolve())
         logger.info('script editor page opened workspace_id=%s root=%s files=%s', workspace_id, self.editor_workspace.resolve(), self.file_system._file_paths())
-        default_file = 'plugins/my_script.py'
+        files = self.file_system._file_paths()
+        default_file = next((path for path in files if path.startswith('plugins/') and path.endswith('.py')), 'plugins/my_script.py')
         editor_id = 'new-script-editor'
         ui.add_head_html('''
             <style>
@@ -426,7 +427,7 @@ class VideoPipelineUI:
         plugin_dir = Path(__file__).with_name('plugins')
         prompt_dir = Path(__file__).with_name('prompts')
         editor_files = sorted([f'plugins/{path.name}' for path in plugin_dir.glob('*.py') if path.stem not in {'__init__', 'base', 'builtin', 'registry'}] + [f'prompts/{path.name}' for path in prompt_dir.glob('*.txt')])
-        default_file = f'prompts/{Path(script.prompt_file).name}' if script else 'plugins/my_script.py'
+        default_file = f'prompts/{Path(script.prompt_file).name}' if script else 'plugins/narration_dialogues.py'
         if default_file not in editor_files:
             editor_files.append(default_file)
         editor_files = sorted(set(editor_files))
@@ -670,7 +671,7 @@ class VideoPipelineUI:
         parent_dialog.close()
         with ui.dialog() as dialog, ui.card().classes('bg-slate-800 text-white w-[min(820px,92vw)] p-6'):
             ui.label('Plugin documentation').classes('text-2xl font-semibold')
-            ui.markdown('''Create `plugins/my_script.py` and `prompts/my_script.txt`, then restart the app:\n\n```python\nfrom plugins.base import AnalysisScript, ScriptConfig\n\ndef get_script():\n    return AnalysisScript(\n        key="my_script",\n        name="My Script",\n        description="What this script analyzes.",\n        prompt_file="prompts/my_script.txt",\n        configs=[ScriptConfig("input_dir", "Input clips folder", "Where clips are read from.", r"A:\\clips")],\n    )\n```\n\nThe registry imports files in `plugins/` that expose `get_script()`. Keep processing logic in a separate service module and use `BufferedAPIClient` for API calls. It stops safely on HTTP failures, network failures, empty or `nothing` responses, and duplicate responses.''').classes('text-slate-200 mt-4')
+            ui.markdown('''Create `plugins/my_script.py` and `prompts/my_prompt.txt`, then restart the app:\n\n```python\nfrom plugins.base import AnalysisScript, ScriptConfig\n\ndef get_script():\n    return AnalysisScript(\n        key="my_script",\n        name="My Script",\n        description="What this script analyzes.",\n        prompt_file="prompts/my_prompt.txt",\n        configs=[ScriptConfig("input_dir", "Input clips folder", "Where clips are read from.", r"A:\\clips")],\n    )\n```\n\nThe registry imports files in `plugins/` that expose `get_script()`. Keep processing logic in a separate service module and use `BufferedAPIClient` for API calls. It stops safely on HTTP failures, network failures, empty or `nothing` responses, and duplicate responses.''').classes('text-slate-200 mt-4')
             ui.button('Close', on_click=dialog.close).props('flat').classes('mt-5')
         dialog.open()
 

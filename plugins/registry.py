@@ -47,7 +47,8 @@ class ScriptRegistry:
                     script = factory()
                     if isinstance(script, AnalysisScript):
                         script.workspace_root = workspace_root
-                        self._apply_metadata(script)
+                        if workspace_root:
+                            self._apply_metadata(script)
                         self.scripts[script.key] = script
                     else:
                         logger.warning('ignored plugin without AnalysisScript file=%s', file)

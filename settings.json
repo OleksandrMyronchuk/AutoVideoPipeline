@@ -13,6 +13,14 @@
   "analysis_skip_existing": true,
   "analysis_request_timeout": 9999,
   "analysis_max_retries": 3,
-  "analysis_script_configs": {},
+  "analysis_script_configs": {
+    "narration_dialogues": {
+      "input_dir": "A:\\clips",
+      "output_dir": "A:\\data_2",
+      "request_file": "A:\\requests\\request1.txt",
+      "workflow_path": "A:\\aistudio_g37_norm",
+      "skip_existing": true
+    }
+  },
   "last_page": "analyze"
 }
