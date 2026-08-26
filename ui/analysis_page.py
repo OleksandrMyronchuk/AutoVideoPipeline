@@ -96,7 +96,7 @@ class AnalysisPageMixin:
         scripts = self.ordered_scripts()
         with self.script_list:
             for index, script in enumerate(scripts):
-                ui.element('div').props(f'data-drop-index="{index}"').classes('script-drop-zone')
+                ui.element('div').props(f'data-drop-index="{index}"').classes('script-drop-zone w-full')
                 with ui.card().props(f'data-script-key="{script.key}"').classes('script-card nicegui-card w-full border border-slate-600 p-4'):
                     with ui.row().classes('w-full items-center justify-between'):
                         with ui.row().classes('items-center gap-3 min-w-0'):
@@ -111,7 +111,7 @@ class AnalysisPageMixin:
                             if script.workspace_root:
                                 ui.button('Rename', icon='drive_file_rename_outline', on_click=lambda item=script: self.open_rename_script(item)).props('flat')
                                 ui.button('Delete', icon='delete', on_click=lambda item=script: self.confirm_delete_script(item)).props('flat color=negative')
-            ui.element('div').props(f'data-drop-index="{len(scripts)}"').classes('script-drop-zone')
+            ui.element('div').props(f'data-drop-index="{len(scripts)}"').classes('script-drop-zone w-full')
 
     def ordered_scripts(self):
         scripts = {script.key: script for script in self.registry.all()}
