@@ -6,6 +6,8 @@ The `plugins` folder is the extension point. At startup, `ScriptRegistry` loads 
 
 The script editor uses `services.file_system_provider.FileSystemProvider` as its workspace filesystem provider. Every editor tab receives a unique workspace under `.script_workspaces/`, containing only that script's `plugins/` and `prompts/` folders. It presents a VS Code Web-style expandable explorer, keeps all paths inside the current script workspace, and supports source, prompt, JSON, and Markdown files. Monaco reads and writes files through this provider rather than directly managing a flat list.
 
+Scripts can enable shared runner behavior through `ScriptHooks`. For example, `ScriptHooks(include_previous_result=True)` asks the runner to append the complete previous clip result to each later request. The runner owns serialization and prompt formatting; the script only declares the capability.
+
 ## Minimal plugin
 
 Create `plugins/my_script.py` and `prompts/my_script.txt`:

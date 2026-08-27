@@ -11,6 +11,16 @@ class AnalysisRunner:
     def __init__(self, client: BufferedAPIClient):
         self.client = client
 
+    @staticmethod
+    def _request_text(template: str, script: AnalysisScript, previous: Any) -> str:
+        if not script.hooks.include_previous_result or previous is None:
+            return template
+        return (
+            f'{template}\n\n'
+            'PRIOR CLIP ANALYSIS (context only; analyze the supplied current clip):\n'
+            f'{json.dumps(previous, ensure_ascii=False, indent=2)}\n'
+        )
+
     def run(self, script: AnalysisScript, config: dict[str, Any], logger=None) -> str:
         logger = logger or logging.getLogger(__name__)
         input_dir = Path(config['input_dir'])
@@ -36,13 +46,7 @@ class AnalysisRunner:
                 previous = existing
                 logger.info('analysis_clip_skipped', extra={'event': 'analysis_clip_skipped', 'script': script.key, 'clip': str(clip)})
                 continue
-            request_text = template
-            if script.key == 'narration_dialogues' and previous is not None:
-                request_text = (
-                    f'{template}\n\n'
-                    'PRIOR CLIP ANALYSIS (context only; analyze the supplied current clip):\n'
-                    f'{json.dumps(previous, ensure_ascii=False, indent=2)}\n'
-                )
+            request_text = self._request_text(template, script, previous)
             payload = {
                 'ExecutionWorkflowPath': workflow_path,
                 '$file': str(clip.resolve()),

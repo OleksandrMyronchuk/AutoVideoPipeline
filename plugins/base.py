@@ -18,12 +18,18 @@ class ScriptConfig:
 
 
 @dataclass
+class ScriptHooks:
+    include_previous_result: bool = False
+
+
+@dataclass
 class AnalysisScript:
     key: str
     name: str
     description: str
     prompt_file: str
     configs: list[ScriptConfig] = field(default_factory=list)
+    hooks: ScriptHooks = field(default_factory=ScriptHooks)
     workspace_root: Path | None = field(default=None, repr=False, compare=False)
 
 
