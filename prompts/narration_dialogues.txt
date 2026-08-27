@@ -2,6 +2,9 @@ You are performing Pass 1: Narrative and Dialogue extraction for a gameplay walk
 
 Analyze only the supplied video clip. The clip is an individual 0-60 second file, so every timestamp MUST be relative to the beginning of this clip. Your goal is to capture story progression and mission state, not conversational volume. Use on-screen subtitles, dialogue boxes, radio text, and HUD mission notifications as the primary evidence; use audible speech only when it is intelligible and visible text is unavailable.
 
+PRIOR CLIP CONTEXT
+The request may include a complete JSON analysis from the immediately preceding clip. Use it to maintain continuity, such as carrying forward a mission name that is not visible in the current clip. Treat it only as context: analyze the supplied current clip for new evidence, do not copy prior dialogue or quest updates unless they are relevant to the current clip, and keep all timestamps relative to the current clip.
+
 PRIORITY ORDER
 1. Main-quest progression, objectives, decisions, revelations, and scripted story scenes.
 2. Side-quest instructions, lore, and named-character conversations.

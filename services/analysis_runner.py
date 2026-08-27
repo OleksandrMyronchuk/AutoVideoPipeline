@@ -36,10 +36,17 @@ class AnalysisRunner:
                 previous = existing
                 logger.info('analysis_clip_skipped', extra={'event': 'analysis_clip_skipped', 'script': script.key, 'clip': str(clip)})
                 continue
+            request_text = template
+            if script.key == 'narration_dialogues' and previous is not None:
+                request_text = (
+                    f'{template}\n\n'
+                    'PRIOR CLIP ANALYSIS (context only; analyze the supplied current clip):\n'
+                    f'{json.dumps(previous, ensure_ascii=False, indent=2)}\n'
+                )
             payload = {
                 'ExecutionWorkflowPath': workflow_path,
                 '$file': str(clip.resolve()),
-                '$text': template,
+                '$text': request_text,
                 'debug_mode': True,
                 'analysis_script': script.key,
                 'script_config': config,
