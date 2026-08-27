@@ -1,4 +1,6 @@
 import logging
+import threading
+from queue import Queue
 from pathlib import Path
 
 from nicegui import run, ui
@@ -284,6 +286,69 @@ class AnalysisPageMixin:
 
     async def run_analysis(self, script, fields, prompt, dialog):
         dialog.close()
+        progress_queue = Queue()
+        resume_event = threading.Event()
+        resume_event.set()
+        cancel_event = threading.Event()
+        with ui.dialog() as progress_dialog, ui.card().classes('nicegui-card text-white w-[min(620px,92vw)] p-6'):
+            ui.label(f'Running {script.name}').classes('text-2xl font-semibold')
+            progress_status = ui.label('Discovering video clips...').classes('muted mt-1')
+            progress_bar = ui.linear_progress(value=0).props('instant-feedback show-value=false').classes('w-full mt-5')
+            progress_counts = ui.label('Waiting for file count...').classes('text-slate-300 mt-2')
+            progress_current = ui.label('').classes('muted text-sm mt-2 break-all')
+            with ui.row().classes('w-full justify-end gap-2 mt-5'):
+                progress_pause = ui.button('Pause', icon='pause', on_click=lambda: toggle_pause()).props('outline')
+                progress_cancel = ui.button('Cancel', icon='stop', on_click=lambda: cancel_analysis()).props('flat color=negative')
+                progress_close = ui.button('Close', on_click=progress_dialog.close).props('flat')
+                progress_close.disable()
+
+            def toggle_pause():
+                if resume_event.is_set():
+                    resume_event.clear()
+                    progress_pause.text = 'Resume'
+                    progress_pause.props('icon=play_arrow')
+                    progress_status.text = 'Paused. No new API requests will start.'
+                else:
+                    resume_event.set()
+                    progress_pause.text = 'Pause'
+                    progress_pause.props('icon=pause')
+
+            def cancel_analysis():
+                cancel_event.set()
+                resume_event.set()
+                progress_cancel.disable()
+                progress_pause.disable()
+                progress_status.text = 'Cancelling after the current request...'
+                progress_dialog.close()
+
+            def update_progress():
+                while not progress_queue.empty():
+                    update = progress_queue.get_nowait()
+                    total = update.get('total', 0)
+                    completed = update.get('completed', 0)
+                    progress_bar.value = completed / total if total else 0
+                    progress_counts.text = f'{completed} processed, {update.get("remaining", 0)} remaining of {total}'
+                    progress_current.text = f'Current file: {update["clip"]}' if update.get('clip') else ''
+                    status = update.get('status')
+                    progress_status.text = {
+                        'discovered': 'Clips discovered. Starting analysis...',
+                        'processing': 'Analyzing current clip...',
+                        'skipped': 'Skipped existing result.',
+                        'completed': 'Clip analysis complete.',
+                        'finished': 'Analysis complete.',
+                        'paused': 'Paused. No new API requests will start.',
+                        'resumed': 'Resuming analysis...',
+                        'cancelled': 'Analysis cancelled safely.',
+                    }.get(status, 'Analysis stopped.')
+                    if status in {'finished', 'cancelled'}:
+                        progress_close.enable()
+
+            progress_timer = ui.timer(0.2, update_progress)
+        progress_dialog.open()
+
+        def on_progress(update):
+            progress_queue.put(update)
+
         try:
             input_dir = Path(fields['input_dir'].value)
             output_dir = Path(fields['output_dir'].value)
@@ -291,9 +356,18 @@ class AnalysisPageMixin:
             pipeline_logger = get_pipeline_logger('analysis', script=script.key)
             pipeline_logger.event('analysis_requested', input_dir=str(input_dir), output_dir=str(output_dir))
             service = PipelineService(self.settings.analysis_api_url, self.settings.analysis_request_timeout, self.settings.analysis_max_retries)
-            result = await run.io_bound(service.analyze, script, config, pipeline_logger)
+            result = await run.io_bound(service.analyze, script, config, pipeline_logger, on_progress, resume_event, cancel_event)
+            update_progress()
             self.log.push(result)
-            ui.notify('Analysis complete', type='positive')
+            if cancel_event.is_set():
+                ui.notify('Analysis cancelled safely', type='warning')
+            else:
+                ui.notify('Analysis complete', type='positive')
         except (APIProcessingError, OSError, ValueError) as error:
+            progress_queue.put({'status': 'failed', 'clip': str(error)})
+            update_progress()
+            progress_close.enable()
             self.log.push(f'Analysis stopped: {error}')
             ui.notify('Analysis stopped safely. See Activity for details.', type='negative')
+        finally:
+            progress_timer.cancel()
