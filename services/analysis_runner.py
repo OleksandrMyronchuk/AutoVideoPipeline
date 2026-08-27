@@ -31,7 +31,9 @@ class AnalysisRunner:
         for clip in clips:
             output_file = output_dir / f'{script.key}_{clip.stem}.json'
             if skip_existing and output_file.exists():
-                previous = json.loads(output_file.read_text(encoding='utf-8'))
+                existing = json.loads(output_file.read_text(encoding='utf-8'))
+                self.client.validate_result(existing, script.key)
+                previous = existing
                 logger.info('analysis_clip_skipped', extra={'event': 'analysis_clip_skipped', 'script': script.key, 'clip': str(clip)})
                 continue
             payload = {
