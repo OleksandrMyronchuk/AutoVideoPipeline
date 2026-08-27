@@ -27,7 +27,7 @@ class CutPageMixin:
             self.log = ui.log(max_lines=12).classes('w-full h-48 bg-slate-900/50 text-slate-300 p-3 font-mono text-xs')
 
     async def on_upload(self, event):
-        target = Path('uploads') / event.file.name
+        target = Path(__file__).parents[1] / 'uploads' / event.file.name
         target.parent.mkdir(exist_ok=True)
         target.write_bytes(await event.file.read())
         self.update_input_value(str(target.resolve()))

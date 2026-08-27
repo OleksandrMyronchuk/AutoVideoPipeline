@@ -21,7 +21,9 @@ Install the optional bundled FFmpeg helper first if needed:
 
 The app can also use an FFmpeg installation available on your `PATH`, or a custom executable selected in **Settings**.
 
-Change the source path, output folder, FFmpeg executable, or clip duration in **Settings**, then click **Save settings**. Those values are written back to `settings.json` and loaded the next time the app starts. The app also remembers the last main page and restores it when you reopen the project.
+Changes to settings and analysis dialog values are saved as they are edited, with a final save when the app closes. They are written atomically to `settings.json`, so they persist whether the app is started from VS Code or directly with `python app.py`. The app also remembers the last main page and restores it when you reopen the project.
+
+The app resolves its settings, plugin, workspace, and upload paths from the project location rather than the current working directory, so direct launches from another folder use the same files.
 
 ## Project structure
 

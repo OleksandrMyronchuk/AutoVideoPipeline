@@ -14,6 +14,7 @@ from services.logging_utils import PipelineFormatter
 PROJECT_ROOT = Path(__file__).parents[1]
 SETTINGS_FILE = PROJECT_ROOT / 'settings.json'
 WORKSPACE_DIR = PROJECT_ROOT / '.script_workspaces'
+SETTINGS_STORE = SettingsStore(SETTINGS_FILE)
 
 
 def configure_logging() -> None:
@@ -30,12 +31,12 @@ def configure_static_files() -> None:
 
 
 def build_page(page: str | None = None) -> None:
-    settings_store = SettingsStore(SETTINGS_FILE)
-    VideoPipelineUI(settings_store).build(page or settings_store.load().last_page)
+    settings = SETTINGS_STORE.load()
+    VideoPipelineUI(SETTINGS_STORE).build(page or settings.last_page)
 
 
 def build_editor_page(workspace_id: str | None = None) -> None:
-    VideoPipelineUI(SettingsStore(SETTINGS_FILE)).build_editor_page(workspace_id)
+    VideoPipelineUI(SETTINGS_STORE).build_editor_page(workspace_id)
 
 
 def find_available_port(preferred: int) -> int:
@@ -80,5 +81,6 @@ def run() -> None:
     configure_logging()
     configure_static_files()
     register_routes()
+    nicegui_app.on_shutdown(SETTINGS_STORE.save_latest)
     port = find_available_port(int(os.environ.get('AVP_PORT', '8080')))
     ui.run(title='Auto Video Pipeline', port=port, reload=False)

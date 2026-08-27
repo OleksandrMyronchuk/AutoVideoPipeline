@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -26,19 +28,21 @@ class AppSettings:
 
 class SettingsStore:
     def __init__(self, settings_file: Path):
-        self.settings_file = settings_file
+        self.settings_file = settings_file.resolve()
+        self._latest_settings: AppSettings | None = None
 
     def load(self) -> AppSettings:
         try:
             values = json.loads(self.settings_file.read_text(encoding='utf-8'))
         except (FileNotFoundError, json.JSONDecodeError, OSError):
-            return AppSettings()
+            self._latest_settings = AppSettings()
+            return self._latest_settings
 
         defaults = AppSettings()
         last_page = values.get('last_page', defaults.last_page)
         if not isinstance(last_page, str) or last_page not in {'cut', 'analyze', 'settings'}:
             last_page = defaults.last_page
-        return AppSettings(
+        self._latest_settings = AppSettings(
             input_path=values.get('input_path', defaults.input_path),
             output_path=values.get('output_path', defaults.output_path),
             segment_duration=self._duration(values.get('segment_duration', defaults.segment_duration), defaults.segment_duration),
@@ -57,9 +61,34 @@ class SettingsStore:
             analysis_script_order=[key for key in values.get('analysis_script_order', []) if isinstance(key, str)] if isinstance(values.get('analysis_script_order', []), list) else [],
             last_page=last_page,
         )
+        return self._latest_settings
 
     def save(self, settings: AppSettings) -> None:
-        self.settings_file.write_text(json.dumps(asdict(settings), indent=2) + '\n', encoding='utf-8')
+        self.settings_file.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps(asdict(settings), indent=2) + '\n'
+        file_descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f'{self.settings_file.stem}.',
+            suffix='.tmp',
+            dir=self.settings_file.parent,
+            text=True,
+        )
+        try:
+            with os.fdopen(file_descriptor, 'w', encoding='utf-8') as temporary_file:
+                temporary_file.write(payload)
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+            os.replace(temporary_name, self.settings_file)
+            self._latest_settings = settings
+        except BaseException:
+            try:
+                os.unlink(temporary_name)
+            except FileNotFoundError:
+                pass
+            raise
+
+    def save_latest(self) -> None:
+        if self._latest_settings is not None:
+            self.save(self._latest_settings)
 
     @staticmethod
     def _duration(value, fallback: int) -> int:

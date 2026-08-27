@@ -238,11 +238,11 @@ class AnalysisPageMixin:
                 for config in configs:
                     value = config.value_for(saved, self.default_config_value(config.key))
                     if config.kind == 'boolean':
-                        fields[config.key] = ui.checkbox(config.name, value=bool(value))
+                        fields[config.key] = ui.checkbox(config.name, value=bool(value), on_change=lambda event, key=config.key: self.save_analysis_script_value(script.key, key, event.value))
                     elif config.kind == 'number':
-                        fields[config.key] = ui.number(config.name, value=value, step=1).classes('w-full')
+                        fields[config.key] = ui.number(config.name, value=value, step=1, on_change=lambda event, key=config.key: self.save_analysis_script_value(script.key, key, event.value)).classes('w-full')
                     else:
-                        fields[config.key] = ui.input(config.name, value='' if value is None else str(value)).classes('w-full')
+                        fields[config.key] = ui.input(config.name, value='' if value is None else str(value), on_change=lambda event, key=config.key: self.save_analysis_script_value(script.key, key, event.value)).classes('w-full')
                     ui.label(config.description).classes('muted text-xs -mt-2')
 
             async def run_script():
@@ -259,6 +259,10 @@ class AnalysisPageMixin:
                 ui.button('Cancel', on_click=dialog.close).props('flat')
                 ui.button('Run analysis', icon='play_arrow', on_click=run_script).props('unelevated').classes('bg-orange-600 text-white')
         dialog.open()
+
+    def save_analysis_script_value(self, script_key, key, value):
+        self.settings.analysis_script_configs.setdefault(script_key, {})[key] = value
+        self.settings_store.save(self.settings)
 
     def default_config_value(self, key):
         return {

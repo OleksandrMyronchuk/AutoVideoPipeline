@@ -35,6 +35,7 @@ class SettingsPageMixin:
         self.settings.input_path = value
         self.input_field.value = value
         self.settings_input_field.value = value
+        self.settings_store.save(self.settings)
 
     def update_output(self, event):
         self.update_output_value(event.value)
@@ -43,26 +44,32 @@ class SettingsPageMixin:
         self.settings.output_path = value
         self.output_field.value = value
         self.settings_output_field.value = value
+        self.settings_store.save(self.settings)
 
     def update_ffmpeg(self, event):
         self.settings.ffmpeg_path = event.value.strip() or 'Auto-detect'
         self.engine_label.text = f'Engine: {self.settings.ffmpeg_path}'
+        self.settings_store.save(self.settings)
 
     def update_duration(self, event):
         if event.value:
             self.settings.segment_duration = int(event.value)
             self.duration_field.value = self.settings.segment_duration
             self.settings_duration_field.value = self.settings.segment_duration
+            self.settings_store.save(self.settings)
 
     def update_analysis_setting(self, name, event):
         setattr(self.settings, name, event.value)
+        self.settings_store.save(self.settings)
 
     def update_analysis_number(self, name, event):
         if event.value is not None:
             setattr(self.settings, name, int(event.value))
+            self.settings_store.save(self.settings)
 
     def update_analysis_bool(self, name, event):
         setattr(self.settings, name, bool(event.value))
+        self.settings_store.save(self.settings)
 
     def save_settings(self):
         self.settings_store.save(self.settings)

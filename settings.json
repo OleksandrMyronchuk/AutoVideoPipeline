@@ -17,8 +17,8 @@
     "narration_dialogues": {
       "input_dir": "A:\\clips",
       "output_dir": "A:\\data_2",
-      "request_file": "A:\\requests\\request1.txt",
-      "workflow_path": "A:\\aistudio_g37_norm",
+      "request_file": "E:\\project\\AutoVideoPipeline\\.script_workspaces\\09306e9a08b144f9806087daed6d8ffe\\prompts\\narration_dialogues.txt",
+      "workflow_path": "A:\\gemini",
       "skip_existing": true
     }
   },
