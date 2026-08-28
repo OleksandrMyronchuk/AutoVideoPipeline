@@ -4,7 +4,7 @@
   "segment_duration": 60,
   "ffmpeg_path": "Auto-detect",
   "analysis_api_url": "http://localhost:8085/request_custom_path",
-  "analysis_workflow_path": "A:\\gemini",
+  "analysis_workflow_path": "A:/gemini_extended",
   "analysis_clips_dir": "A:\\clips",
   "analysis_output_dir": "A:\\data_2",
   "analysis_state_file": "A:\\settings\\state.json",
@@ -18,14 +18,14 @@
       "input_dir": "A:\\clips",
       "output_dir": "A:\\data_2",
       "request_file": "E:\\project\\AutoVideoPipeline\\.script_workspaces\\09306e9a08b144f9806087daed6d8ffe\\prompts\\narration_dialogues.txt",
-      "workflow_path": "A:\\gemini",
+      "workflow_path": "A:/gemini_extended",
       "skip_existing": true
     },
     "event_timeline": {
       "input_dir": "A:\\clips",
       "output_dir": "A:\\data_2v1",
       "request_file": "E:\\project\\AutoVideoPipeline\\.script_workspaces\\6e6f5b5c2b7c4f73a2d8b1c9e4f60123\\prompts\\event_timeline.txt",
-      "workflow_path": "A:\\gemini",
+      "workflow_path": "A:/gemini_extended",
       "skip_existing": true
     }
   },
