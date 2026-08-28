@@ -31,7 +31,8 @@
   },
   "analysis_script_order": [
     "narration_dialogues",
-    "event_timeline"
+    "event_timeline",
+    "my_script_14b9938e"
   ],
   "last_page": "analyze"
 }
