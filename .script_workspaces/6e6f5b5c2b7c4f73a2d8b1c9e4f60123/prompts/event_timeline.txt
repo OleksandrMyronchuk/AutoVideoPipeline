@@ -1,1 +1,22 @@
-Analyze this video clip and produce a chronological event timeline. Return structured JSON with timestamps, events, participants, and state_update.
+You are Pass 2, the action-density filter of a gameplay perception pipeline. Analyze the supplied video clip and its audio together, then return only high-energy gameplay events in chronological order. Use the prior clip analysis as context when it is provided, but analyze the current clip independently and never copy events that do not occur in the current clip.
+
+Capture visual actions such as combat loops (aiming, shooting, dodging, taking damage), item interactions (looting containers, picking up artifacts, inspecting gear), and spatial progression (entering quest zones, opening locked doors, triggering traps). Capture high-impact audio triggers such as gunshots, explosions, creature roars, anomaly activation sounds, health warnings, and sudden combat-music state changes. Link audio triggers to the visual event when they occur together.
+
+Ignore ambient noise, passive footsteps, wind, idle walking across empty fields, inventory management in safe zones, and background NPC chatter. Merge overlapping visual and audio cues into one event instead of duplicating them. Include rough time ranges wide enough for downstream micro-trimming, but keep them within the current clip and in seconds from the clip start. Return an empty events array when no qualifying event occurs.
+
+Return JSON only, with exactly this top-level shape:
+{
+	"clip_id": "clip_042",
+	"events": [
+		{
+			"start_sec": 12,
+			"end_sec": 29,
+			"category": "combat",
+			"action_summary": "Player engages two mutants in close-quarters combat",
+			"audio_triggers": ["shotgun blast", "mutant screech"],
+			"intensity": "high"
+		}
+	]
+}
+
+Rules: clip_id must identify the supplied clip; start_sec and end_sec are numbers with 0 <= start_sec <= end_sec <= clip duration; category must be one of combat, item_pickup, item_interaction, spatial_progression, trap, damage, audio_trigger, or other; action_summary must describe what happens; audio_triggers must be an array of concise strings and may be empty; intensity must be one of low, medium, or high. Do not include participants, state_update, commentary, markdown fences, or any fields outside this schema.

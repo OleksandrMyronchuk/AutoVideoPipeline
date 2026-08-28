@@ -376,7 +376,8 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
     @staticmethod
     def default_plugin_content(workspace_id):
         key = f'my_script_{workspace_id[:8]}'
-        return f"from plugins.base import AnalysisScript, ScriptConfig\n\n\ndef get_script():\n    return AnalysisScript(key='{key}', name='My Script', description='Describe this script.', prompt_file='prompts/my_prompt.txt', configs=[ScriptConfig('input_dir', 'Input clips folder', 'Where clips are read from.', None)])\n"
+        prompt_path = (Path(__file__).with_name('.script_workspaces') / workspace_id / 'prompts' / 'my_prompt.txt').resolve()
+        return f"from plugins.base import AnalysisScript, ScriptConfig\n\n\ndef get_script():\n    return AnalysisScript(key='{key}', name='My Script', description='Describe this script.', prompt_file='prompts/my_prompt.txt', configs=[ScriptConfig('input_dir', 'Input clips folder', 'Where clips are read from.', None), ScriptConfig('request_file', 'Prompt file', 'Prompt file used for this script.', {str(prompt_path)!r})])\n"
 
     async def save_editor_file(self, file_select, editor_id):
         relative_path = file_select.value

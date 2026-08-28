@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 import re
 import subprocess
@@ -97,6 +98,41 @@ class BufferedAPIClient:
             raise APIProcessingError('API returned JSON, but the result is not a JSON object.')
         if isinstance(result.get('error'), str):
             raise APIProcessingError(f"API workflow error: {result['error']}")
+        if script_key == 'event_timeline':
+            required = {'clip_id', 'events'}
+            if set(result) != required:
+                extra = set(result) - required
+                if extra:
+                    raise APIProcessingError(f"Event timeline result contains unexpected fields: {', '.join(sorted(extra))}.")
+            missing = required - result.keys()
+            if missing:
+                raise APIProcessingError(f"Event timeline result is missing required fields: {', '.join(sorted(missing))}.")
+            if not isinstance(result['clip_id'], str) or not result['clip_id'].strip():
+                raise APIProcessingError('Event timeline clip_id must be a non-empty string.')
+            if not isinstance(result['events'], list):
+                raise APIProcessingError('Event timeline events must be an array.')
+            categories = {'combat', 'item_pickup', 'item_interaction', 'spatial_progression', 'trap', 'damage', 'audio_trigger', 'other'}
+            intensities = {'low', 'medium', 'high'}
+            for event in result['events']:
+                required_event = {'start_sec', 'end_sec', 'category', 'action_summary', 'audio_triggers', 'intensity'}
+                if not isinstance(event, dict) or not required_event <= event.keys():
+                    raise APIProcessingError('Event timeline contains an invalid event.')
+                if set(event) != required_event:
+                    raise APIProcessingError('Event timeline event contains unexpected fields.')
+                start_sec = event['start_sec']
+                end_sec = event['end_sec']
+                if (isinstance(start_sec, bool) or isinstance(end_sec, bool) or
+                        not isinstance(start_sec, (int, float)) or not isinstance(end_sec, (int, float)) or
+                        not math.isfinite(start_sec) or not math.isfinite(end_sec) or
+                        not 0 <= start_sec <= end_sec):
+                    raise APIProcessingError('Event timeline timestamps must be numbers with 0 <= start_sec <= end_sec.')
+                if event['category'] not in categories or event['intensity'] not in intensities:
+                    raise APIProcessingError('Event timeline category or intensity is invalid.')
+                if not isinstance(event['action_summary'], str) or not event['action_summary'].strip():
+                    raise APIProcessingError('Event timeline action_summary must be a non-empty string.')
+                if not isinstance(event['audio_triggers'], list) or not all(isinstance(trigger, str) for trigger in event['audio_triggers']):
+                    raise APIProcessingError('Event timeline audio_triggers must be an array of strings.')
+            return
         if script_key != 'narration_dialogues':
             return
         required = {'clip_summary', 'active_mission', 'dialogue_events', 'quest_updates'}

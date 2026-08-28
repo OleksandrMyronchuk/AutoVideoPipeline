@@ -225,7 +225,7 @@ class AnalysisPageMixin:
         shared_configs = (
             ScriptConfig('input_dir', 'Input clips folder', 'Folder containing video clips to analyze.', self.settings.analysis_clips_dir),
             ScriptConfig('output_dir', 'Output folder', 'Folder where analysis JSON files are written.', self.settings.analysis_output_dir),
-            ScriptConfig('request_file', 'Prompt file', 'Optional file containing an extra prompt template.', self.settings.analysis_request_file),
+            ScriptConfig('request_file', 'Prompt file', 'Optional file containing an extra prompt template.', self.prompt_path_for(script)),
             ScriptConfig('workflow_path', 'Workflow path', 'Workflow path sent to the API.', self.settings.analysis_workflow_path),
             ScriptConfig('skip_existing', 'Skip existing outputs', 'Do not send clips that already have an output JSON.', self.settings.analysis_skip_existing, 'boolean'),
         )
@@ -274,6 +274,12 @@ class AnalysisPageMixin:
             'workflow_path': self.settings.analysis_workflow_path,
             'skip_existing': self.settings.analysis_skip_existing,
         }.get(key)
+
+    @staticmethod
+    def prompt_path_for(script):
+        if script.workspace_root and script.prompt_file:
+            return str((script.workspace_root / script.prompt_file).resolve())
+        return None
 
     def show_prompt(self, script, parent_dialog):
         if parent_dialog:
