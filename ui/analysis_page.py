@@ -293,7 +293,9 @@ class AnalysisPageMixin:
         with ui.dialog() as progress_dialog, ui.card().classes('nicegui-card text-white w-[min(620px,92vw)] p-6'):
             ui.label(f'Running {script.name}').classes('text-2xl font-semibold')
             progress_status = ui.label('Discovering video clips...').classes('muted mt-1')
-            progress_bar = ui.linear_progress(value=0).props('instant-feedback show-value=false').classes('w-full mt-5')
+            with ui.element('div').classes('relative w-full mt-5'):
+                progress_bar = ui.linear_progress(value=0, show_value=False).props('instant-feedback').classes('w-full')
+                progress_percentage = ui.label('[0%]').classes('absolute inset-0 flex items-center justify-center text-white pointer-events-none')
             progress_counts = ui.label('Waiting for file count...').classes('text-slate-300 mt-2')
             progress_current = ui.label('').classes('muted text-sm mt-2 break-all')
             with ui.row().classes('w-full justify-end gap-2 mt-5'):
@@ -327,6 +329,7 @@ class AnalysisPageMixin:
                     total = update.get('total', 0)
                     completed = update.get('completed', 0)
                     progress_bar.value = completed / total if total else 0
+                    progress_percentage.text = f'[{round(completed / total * 100) if total else 0}%]'
                     progress_counts.text = f'{completed} processed, {update.get("remaining", 0)} remaining of {total}'
                     progress_current.text = f'Current file: {update["clip"]}' if update.get('clip') else ''
                     status = update.get('status')

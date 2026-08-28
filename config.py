@@ -1,6 +1,8 @@
 import json
 import os
 import tempfile
+import threading
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -30,6 +32,7 @@ class SettingsStore:
     def __init__(self, settings_file: Path):
         self.settings_file = settings_file.resolve()
         self._latest_settings: AppSettings | None = None
+        self._save_lock = threading.RLock()
 
     def load(self) -> AppSettings:
         try:
@@ -64,27 +67,35 @@ class SettingsStore:
         return self._latest_settings
 
     def save(self, settings: AppSettings) -> None:
-        self.settings_file.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps(asdict(settings), indent=2) + '\n'
-        file_descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f'{self.settings_file.stem}.',
-            suffix='.tmp',
-            dir=self.settings_file.parent,
-            text=True,
-        )
-        try:
-            with os.fdopen(file_descriptor, 'w', encoding='utf-8') as temporary_file:
-                temporary_file.write(payload)
-                temporary_file.flush()
-                os.fsync(temporary_file.fileno())
-            os.replace(temporary_name, self.settings_file)
-            self._latest_settings = settings
-        except BaseException:
+        with self._save_lock:
+            self.settings_file.parent.mkdir(parents=True, exist_ok=True)
+            payload = json.dumps(asdict(settings), indent=2) + '\n'
+            file_descriptor, temporary_name = tempfile.mkstemp(
+                prefix=f'{self.settings_file.stem}.',
+                suffix='.tmp',
+                dir=self.settings_file.parent,
+                text=True,
+            )
             try:
-                os.unlink(temporary_name)
-            except FileNotFoundError:
-                pass
-            raise
+                with os.fdopen(file_descriptor, 'w', encoding='utf-8') as temporary_file:
+                    temporary_file.write(payload)
+                    temporary_file.flush()
+                    os.fsync(temporary_file.fileno())
+                for attempt in range(3):
+                    try:
+                        os.replace(temporary_name, self.settings_file)
+                        break
+                    except PermissionError:
+                        if attempt == 2:
+                            raise
+                        time.sleep(0.1)
+                self._latest_settings = settings
+            except BaseException:
+                try:
+                    os.unlink(temporary_name)
+                except FileNotFoundError:
+                    pass
+                raise
 
     def save_latest(self) -> None:
         if self._latest_settings is not None:
