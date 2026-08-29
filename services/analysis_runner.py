@@ -48,8 +48,14 @@ class AnalysisRunner:
                 report('resumed')
             return not cancel_event or not cancel_event.is_set()
 
-        input_dir = Path(config['input_dir'])
-        output_dir = Path(config['output_dir'])
+        if script.hooks.merge_json:
+            return self._merge_json_fields(script, config, report)
+
+        missing_keys = [key for key in ('input_dir', 'output_dir') if not config.get(key)]
+        if missing_keys:
+            raise APIProcessingError(f'{script.name} is missing required configuration fields: {", ".join(missing_keys)}.')
+        input_dir = Path(str(config['input_dir']))
+        output_dir = Path(str(config['output_dir']))
         workflow_path = str(config.get('workflow_path', ''))
         request_file = Path(config.get('request_file', ''))
         skip_existing = bool(config.get('skip_existing', True))
@@ -101,3 +107,43 @@ class AnalysisRunner:
         logger.info('analysis_completed', extra={'event': 'analysis_completed', 'script': script.key, 'processed': processed, 'output_dir': str(output_dir)})
         report('finished', total=len(clips), completed=completed, processed=processed, skipped=skipped, remaining=0)
         return f'{script.name}: processed {processed} clip(s); output saved to {output_dir}'
+
+    @staticmethod
+    def _merge_json_fields(script: AnalysisScript, config: dict[str, Any], report: Callable[..., None]) -> str:
+        input_values = [config.get(item.key) for item in script.configs if item.field_type == 'input' and config.get(item.key)]
+        output_value = next((config.get(item.key) for item in script.configs if item.field_type == 'output' and config.get(item.key)), None)
+        if not input_values:
+            raise APIProcessingError('Add at least one JSON input field.')
+        if not output_value:
+            raise APIProcessingError('Add a JSON output field.')
+        source_files = []
+        for value in input_values:
+            path = Path(str(value))
+            if path.is_file():
+                source_files.append(path)
+            elif path.is_dir():
+                source_files.extend(sorted(item for item in path.glob('*.json') if item.is_file()))
+            else:
+                raise APIProcessingError(f'JSON input path does not exist: {path}')
+        if not source_files:
+            raise APIProcessingError('No JSON files found in the configured input paths.')
+        report('discovered', total=len(source_files), completed=0, processed=0, skipped=0, remaining=len(source_files))
+        values = []
+        for source_file in source_files:
+            try:
+                values.append(json.loads(source_file.read_text(encoding='utf-8-sig')))
+            except (OSError, json.JSONDecodeError) as error:
+                raise APIProcessingError(f'Could not read JSON file {source_file}: {error}') from error
+        if all(isinstance(value, list) for value in values):
+            merged = [item for value in values for item in value]
+        elif all(isinstance(value, dict) for value in values):
+            merged = {}
+            for value in values:
+                merged.update(value)
+        else:
+            merged = values
+        output_file = Path(str(output_value))
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        save_atomic_json(output_file, merged)
+        report('finished', total=len(source_files), completed=len(source_files), processed=len(source_files), skipped=0, remaining=0)
+        return f'{script.name}: merged {len(source_files)} JSON file(s) into {output_file}'

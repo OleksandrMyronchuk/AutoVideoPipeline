@@ -43,21 +43,115 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
 
     def open_new_script_dialog(self, parent_dialog):
         parent_dialog.close()
-        with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(560px,92vw)] p-5'):
-            ui.label('Name your script').classes('text-xl font-semibold')
-            name_input = ui.input('Script name').classes('w-full mt-4')
+        self.open_script_constructor()
 
-            def create():
+    def open_script_constructor(self, script=None):
+        existing_fields = self.constructor_fields_for(script)
+        with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(900px,94vw)] p-6'):
+            ui.label('Edit script constructor' if script else 'Build a script constructor').classes('text-2xl font-semibold')
+            name_input = ui.input('Script name', value=script.name if script else '').classes('w-full mt-4')
+            ui.label('Add fields that the script will expose when configured.').classes('muted text-sm mt-1')
+            rows = ui.column().classes('w-full gap-2 mt-4')
+            row_controls = []
+
+            def add_field(field=None):
+                field = field or {'type': 'input', 'name': '', 'value': ''}
+                with rows:
+                    with ui.row().classes('w-full items-center gap-2'):
+                        field_type = ui.select(['input', 'output', 'prompt'], label='Field type', value=field['type']).classes('w-32 shrink-0')
+                        field_name = ui.input('Field name', value=field['name']).classes('flex-1 min-w-32')
+                        field_value = ui.input('File path or text content', value=field['value']).classes('flex-[2] min-w-48')
+                        remove = ui.button(icon='delete', on_click=lambda: remove_field(row)).props('flat color=negative')
+                        row = {'key': field.get('key'), 'type': field_type, 'name': field_name, 'value': field_value, 'remove': remove}
+                        row_controls.append(row)
+
+            def remove_field(row):
+                if len(row_controls) == 1:
+                    ui.notify('Keep at least one field.', type='negative')
+                    return
+                row_controls.remove(row)
+                row['remove'].parent.delete()
+
+            for field in existing_fields:
+                add_field(field)
+            if not existing_fields:
+                add_field()
+            ui.button('Add field', icon='add', on_click=add_field).props('outline').classes('mt-3')
+
+            def save_constructor():
                 name = (name_input.value or '').strip()
+                fields = [
+                    {'key': row['key'], 'type': row['type'].value, 'name': (row['name'].value or '').strip(), 'value': row['value'].value or ''}
+                    for row in row_controls
+                ]
                 if not name:
                     ui.notify('Script name cannot be empty.', type='negative')
                     return
-                self.open_new_script_editor(dialog, name)
+                if any(not field['name'] for field in fields):
+                    ui.notify('Every field needs a name.', type='negative')
+                    return
+                if len({field['name'].casefold() for field in fields}) != len(fields):
+                    ui.notify('Field names must be unique.', type='negative')
+                    return
+                try:
+                    self.save_script_constructor(dialog, script, name, fields)
+                except (OSError, ValueError) as error:
+                    ui.notify(str(error), type='negative')
 
-            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+            with ui.row().classes('w-full justify-end gap-2 mt-5'):
                 ui.button('Cancel', on_click=dialog.close).props('flat')
-                ui.button('Create', on_click=create).props('unelevated').classes('bg-orange-600 text-white')
+                ui.button('Add Script' if not script else 'Save fields', icon='save', on_click=save_constructor).props('unelevated').classes('bg-orange-600 text-white')
         dialog.open()
+
+    @staticmethod
+    def constructor_fields_for(script):
+        if not script or not script.workspace_root:
+            return []
+        try:
+            metadata = json.loads((script.workspace_root / '.script.json').read_text(encoding='utf-8'))
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return []
+        fields = metadata.get('fields', [])
+        valid_fields = [field for field in fields if isinstance(field, dict) and field.get('type') in {'input', 'output', 'prompt'}]
+        if valid_fields:
+            return valid_fields
+        return [
+            {'key': config.key, 'type': {'output_dir': 'output', 'request_file': 'prompt'}.get(config.key, 'input'), 'name': config.name, 'value': '' if config.default is None else str(config.default)}
+            for config in script.configs
+        ]
+
+    def save_script_constructor(self, dialog, script, name, fields):
+        workspace_id = script.workspace_root.name if script and script.workspace_root else uuid4().hex
+        workspace = Path(__file__).with_name('.script_workspaces') / workspace_id
+        workspace.mkdir(parents=True, exist_ok=True)
+        provider = FileSystemProvider(workspace)
+        script_key = script.key if script else f'my_script_{workspace_id[:8]}'
+        prompt_fields = [field['value'] for field in fields if field['type'] == 'prompt' and field['value']]
+        prompt = '\n\n'.join(prompt_fields) or 'Analyze this video and return structured JSON.'
+        if not script:
+            provider.write('prompts/my_prompt.txt', prompt + '\n')
+        configs = []
+        for index, field in enumerate(fields):
+            config_key = field.get('key') or f'field_{index + 1}'
+            configs.append(f"ScriptConfig({config_key!r}, {field['name']!r}, {field['type'].title() + ' field.'!r}, {field['value']!r}, field_type={field['type']!r})")
+        hooks = 'ScriptHooks(merge_json=True)' if not script else f'ScriptHooks(include_previous_result={script.hooks.include_previous_result!r}, merge_json={script.hooks.merge_json!r})'
+        prompt_file = script.prompt_file if script else 'prompts/my_prompt.txt'
+        plugin = (
+            'from plugins.base import AnalysisScript, ScriptConfig, ScriptHooks\n\n\n'
+            'def get_script():\n'
+            f'    return AnalysisScript(key={script_key!r}, name={name!r}, description="Configured script fields.", '
+            f'prompt_file={prompt_file!r}, configs=[{", ".join(configs)}], hooks={hooks})\n'
+        )
+        plugin_path = f'plugins/{Path(script.prompt_file).stem}.py' if script else 'plugins/my_script.py'
+        provider.write(plugin_path, plugin)
+        (workspace / '.script.json').write_text(json.dumps({'name': name, 'fields': fields}, indent=2) + '\n', encoding='utf-8')
+        self.registry.reload()
+        if not script and script_key not in self.settings.analysis_script_order:
+            self.settings.analysis_script_order.append(script_key)
+        self.settings_store.save(self.settings)
+        self.render_script_list()
+        dialog.close()
+        ui.notify('Script added' if not script else 'Script fields saved', type='positive')
 
     def open_new_script_editor(self, dialog, name):
         dialog.close()

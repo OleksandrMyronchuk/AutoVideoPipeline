@@ -40,3 +40,5 @@ The app resolves its settings, plugin, workspace, and upload paths from the proj
 - `docs/PLUGIN_DEVELOPMENT.md` documents the plugin contract and API safety rules.
 
 Open **Analyze Video** to use **Narration and Dialogues** or **Event Timeline**. The `+` button opens the extension menu and documentation.
+
+Use **Add script** > **Create a New Script** to build a script constructor. Each field has a type (`input`, `output`, or `prompt`), a readable name, and a file path or text value. The generated fields can be changed later with **Edit fields**. Constructors use the input fields to read JSON files or all JSON files in a directory, combine arrays or objects, and write the result to the output field. For example, use two input fields set to `A:\data_2` and `A:\data_2v1`, and an output field set to `A:\data_3\output.json`.

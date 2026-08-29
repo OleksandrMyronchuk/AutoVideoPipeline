@@ -1,3 +1,4 @@
+import json
 import logging
 import threading
 from queue import Queue
@@ -141,6 +142,7 @@ class AnalysisPageMixin:
                             ui.button('Read', icon='menu_book', on_click=lambda item=script: self.show_prompt(item, None)).props('flat')
                             ui.button('Edit', icon='edit', on_click=lambda item=script: self.open_editor(item)).props('flat')
                             if script.workspace_root:
+                                ui.button('Config fields', icon='tune', on_click=lambda item=script: self.open_script_constructor(item)).props('flat')
                                 ui.button('Rename', icon='drive_file_rename_outline', on_click=lambda item=script: self.open_rename_script(item)).props('flat')
                                 ui.button('Delete', icon='delete', on_click=lambda item=script: self.confirm_delete_script(item)).props('flat color=negative')
             ui.element('div').props(f'data-drop-index="{len(scripts)}"').classes('script-drop-zone w-full')
@@ -200,6 +202,16 @@ class AnalysisPageMixin:
                 ui.button('Rename', on_click=rename).props('unelevated').classes('bg-orange-600 text-white')
         dialog.open()
 
+    @staticmethod
+    def is_constructor_script(script):
+        if not script.workspace_root:
+            return False
+        try:
+            metadata = json.loads((script.workspace_root / '.script.json').read_text(encoding='utf-8'))
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return False
+        return isinstance(metadata.get('fields'), list) and bool(metadata['fields'])
+
     def confirm_delete_script(self, script):
         with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(560px,92vw)] p-5'):
             ui.label(f'Delete {script.name}?').classes('text-xl font-semibold')
@@ -222,7 +234,7 @@ class AnalysisPageMixin:
     def open_script(self, script):
         saved = self.settings.analysis_script_configs.get(script.key, {})
         configs = list(script.configs)
-        shared_configs = (
+        shared_configs = () if script.hooks.merge_json else (
             ScriptConfig('input_dir', 'Input clips folder', 'Folder containing video clips to analyze.', self.settings.analysis_clips_dir),
             ScriptConfig('output_dir', 'Output folder', 'Folder where analysis JSON files are written.', self.settings.analysis_output_dir),
             ScriptConfig('request_file', 'Prompt file', 'Optional file containing an extra prompt template.', self.prompt_path_for(script)),
@@ -359,9 +371,13 @@ class AnalysisPageMixin:
             progress_queue.put(update)
 
         try:
-            input_dir = Path(fields['input_dir'].value)
-            output_dir = Path(fields['output_dir'].value)
             config = {key: field.value for key, field in fields.items()}
+            required_keys = {'input_dir', 'output_dir'}
+            missing_keys = sorted(key for key in required_keys if not config.get(key))
+            if missing_keys:
+                raise APIProcessingError(f'{script.name} is missing required configuration fields: {", ".join(missing_keys)}.')
+            input_dir = Path(config['input_dir'])
+            output_dir = Path(config['output_dir'])
             pipeline_logger = get_pipeline_logger('analysis', script=script.key)
             pipeline_logger.event('analysis_requested', input_dir=str(input_dir), output_dir=str(output_dir))
             service = PipelineService(self.settings.analysis_api_url, self.settings.analysis_request_timeout, self.settings.analysis_max_retries)
@@ -372,7 +388,8 @@ class AnalysisPageMixin:
                 ui.notify('Analysis cancelled safely', type='warning')
             else:
                 ui.notify('Analysis complete', type='positive')
-        except (APIProcessingError, OSError, ValueError) as error:
+        except (APIProcessingError, KeyError, OSError, ValueError) as error:
+            logger.exception('analysis failed script=%s error=%s', script.key, error)
             progress_queue.put({'status': 'failed', 'clip': str(error)})
             update_progress()
             progress_close.enable()

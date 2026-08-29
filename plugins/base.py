@@ -10,6 +10,7 @@ class ScriptConfig:
     description: str
     default: Any = None
     kind: str = 'text'
+    field_type: str = 'input'
 
     def value_for(self, saved: dict[str, Any], fallback: Any = None) -> Any:
         if self.key in saved:
@@ -20,6 +21,7 @@ class ScriptConfig:
 @dataclass
 class ScriptHooks:
     include_previous_result: bool = False
+    merge_json: bool = False
 
 
 @dataclass
