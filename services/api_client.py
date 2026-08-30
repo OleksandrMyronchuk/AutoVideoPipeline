@@ -98,7 +98,8 @@ class BufferedAPIClient:
             raise APIProcessingError('API returned JSON, but the result is not a JSON object.')
         if isinstance(result.get('error'), str):
             raise APIProcessingError(f"API workflow error: {result['error']}")
-        if script_key == 'event_timeline':
+
+        if 'events' in result:
             required = {'events'}
             if set(result) != required:
                 extra = set(result) - required
@@ -131,27 +132,28 @@ class BufferedAPIClient:
                 if not isinstance(event['audio_triggers'], list) or not all(isinstance(trigger, str) for trigger in event['audio_triggers']):
                     raise APIProcessingError('Event timeline audio_triggers must be an array of strings.')
             return
-        if script_key != 'narration_dialogues':
+
+        if {'clip_summary', 'dialogue_events', 'quest_updates'} <= result.keys():
+            required = {'clip_summary', 'active_mission', 'dialogue_events', 'quest_updates'}
+            missing = required - result.keys()
+            if missing:
+                raise APIProcessingError(f'Narration result is missing required fields: {", ".join(sorted(missing))}.')
+            if not isinstance(result['dialogue_events'], list) or not isinstance(result['quest_updates'], list):
+                raise APIProcessingError('Narration result dialogue_events and quest_updates must be arrays.')
+            placeholder_text = 'Brief 1-2 sentence overview of narrative progress during this clip.'
+            if result.get('clip_summary') == placeholder_text or result.get('active_mission') == 'Current main objective visible on UI or stated in dialogue, or None/Unknown':
+                raise APIProcessingError('Narration workflow returned the prompt schema instead of an analysis result.')
+            for event in result['dialogue_events']:
+                if not isinstance(event, dict) or not {'start_sec', 'end_sec', 'speaker', 'transcript'} <= event.keys():
+                    raise APIProcessingError('Narration result contains an invalid dialogue event.')
+                if not isinstance(event['start_sec'], (int, float)) or not isinstance(event['end_sec'], (int, float)) or not 0 <= event['start_sec'] <= event['end_sec'] <= 60:
+                    raise APIProcessingError('Narration dialogue timestamps must be numbers between 0 and 60 seconds.')
+            for update in result['quest_updates']:
+                if not isinstance(update, dict) or not {'timestamp_sec', 'objective_text', 'status'} <= update.keys():
+                    raise APIProcessingError('Narration result contains an invalid quest update.')
+                if not isinstance(update['timestamp_sec'], (int, float)) or not 0 <= update['timestamp_sec'] <= 60:
+                    raise APIProcessingError('Narration quest timestamps must be numbers between 0 and 60 seconds.')
             return
-        required = {'clip_summary', 'active_mission', 'dialogue_events', 'quest_updates'}
-        missing = required - result.keys()
-        if missing:
-            raise APIProcessingError(f'Narration result is missing required fields: {", ".join(sorted(missing))}.')
-        if not isinstance(result['dialogue_events'], list) or not isinstance(result['quest_updates'], list):
-            raise APIProcessingError('Narration result dialogue_events and quest_updates must be arrays.')
-        placeholder_text = 'Brief 1-2 sentence overview of narrative progress during this clip.'
-        if result.get('clip_summary') == placeholder_text or result.get('active_mission') == 'Current main objective visible on UI or stated in dialogue, or None/Unknown':
-            raise APIProcessingError('Narration workflow returned the prompt schema instead of an analysis result.')
-        for event in result['dialogue_events']:
-            if not isinstance(event, dict) or not {'start_sec', 'end_sec', 'speaker', 'transcript'} <= event.keys():
-                raise APIProcessingError('Narration result contains an invalid dialogue event.')
-            if not isinstance(event['start_sec'], (int, float)) or not isinstance(event['end_sec'], (int, float)) or not 0 <= event['start_sec'] <= event['end_sec'] <= 60:
-                raise APIProcessingError('Narration dialogue timestamps must be numbers between 0 and 60 seconds.')
-        for update in result['quest_updates']:
-            if not isinstance(update, dict) or not {'timestamp_sec', 'objective_text', 'status'} <= update.keys():
-                raise APIProcessingError('Narration result contains an invalid quest update.')
-            if not isinstance(update['timestamp_sec'], (int, float)) or not 0 <= update['timestamp_sec'] <= 60:
-                raise APIProcessingError('Narration quest timestamps must be numbers between 0 and 60 seconds.')
 
     @staticmethod
     def is_empty(parsed: Any, raw_text: str) -> bool:

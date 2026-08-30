@@ -11,6 +11,7 @@ class ScriptConfig:
     default: Any = None
     kind: str = 'text'
     field_type: str = 'input'
+    merge_group: str | None = None
 
     def value_for(self, saved: dict[str, Any], fallback: Any = None) -> Any:
         if self.key in saved:

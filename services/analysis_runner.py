@@ -135,14 +135,14 @@ class AnalysisRunner:
         if not output_value:
             raise APIProcessingError('Add a JSON output field.')
 
-        source_files: list[tuple[str, Path]] = []
+        source_files: list[tuple[Any, Path]] = []
         for item in input_configs:
             value = config.get(item.key)
             path = Path(str(value))
             if path.is_file():
-                source_files.append((item.key, path))
+                source_files.append((item, path))
             elif path.is_dir():
-                source_files.extend((item.key, file_path) for file_path in sorted(path.glob('*.json')) if file_path.is_file())
+                source_files.extend((item, file_path) for file_path in sorted(path.glob('*.json')) if file_path.is_file())
             else:
                 raise APIProcessingError(f'JSON input path does not exist: {path}')
 
@@ -151,13 +151,13 @@ class AnalysisRunner:
         report('discovered', total=len(source_files), completed=0, processed=0, skipped=0, remaining=len(source_files))
 
         grouped: dict[str, dict[str, list[Any]]] = {}
-        for config_key, source_file in source_files:
+        for item, source_file in source_files:
             try:
                 parsed = json.loads(source_file.read_text(encoding='utf-8-sig'))
             except (OSError, json.JSONDecodeError) as error:
                 raise APIProcessingError(f'Could not read JSON file {source_file}: {error}') from error
             entry_values = parsed if isinstance(parsed, list) else [parsed]
-            category = 'narration_dialogues' if 'narration' in config_key.lower() else 'event_timeline' if 'timeline' in config_key.lower() else 'event_timeline'
+            group_name = item.merge_group or item.key
             for value in entry_values:
                 if not isinstance(value, dict):
                     continue
@@ -166,8 +166,8 @@ class AnalysisRunner:
                     clip_id = AnalysisRunner._normalize_clip_id(source_file.stem)
                 if clip_id is None:
                     clip_id = 'unknown'
-                clip_entry = grouped.setdefault(clip_id, {'narration_dialogues': [], 'event_timeline': []})
-                clip_entry.setdefault(category, []).append(value)
+                clip_entry = grouped.setdefault(clip_id, {})
+                clip_entry.setdefault(group_name, []).append(value)
 
         ordered = {
             key: grouped[key]
