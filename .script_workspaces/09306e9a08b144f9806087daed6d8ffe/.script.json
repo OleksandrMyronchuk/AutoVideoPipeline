@@ -1,0 +1,35 @@
+{
+  "name": "Narration and Dialogues",
+  "fields": [
+    {
+      "key": "input_dir",
+      "type": "input",
+      "name": "Input clips folder",
+      "value": "A:\\clips"
+    },
+    {
+      "key": "output_dir",
+      "type": "output",
+      "name": "Output folder",
+      "value": "A:\\data_2"
+    },
+    {
+      "key": "request_file",
+      "type": "prompt",
+      "name": "Prompt file",
+      "value": "E:\\project\\AutoVideoPipeline\\.script_workspaces\\09306e9a08b144f9806087daed6d8ffe\\prompts\\narration_dialogues.txt"
+    },
+    {
+      "key": "workflow_path",
+      "type": "input",
+      "name": "Workflow path",
+      "value": "A:/gemini_extended"
+    },
+    {
+      "key": "skip_existing",
+      "type": "input",
+      "name": "Skip existing outputs",
+      "value": "True"
+    }
+  ]
+}
