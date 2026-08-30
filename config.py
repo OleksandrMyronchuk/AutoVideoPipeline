@@ -16,7 +16,7 @@ class AppSettings:
     analysis_api_url: str = 'http://localhost:8085/request_custom_path'
     analysis_workflow_path: str = r'A:\aistudio_g37_norm'
     analysis_clips_dir: str = r'A:\clips'
-    analysis_output_dir: str = r'A:\data_2'
+    analysis_output_dir: str = r'A:\data_3'
     analysis_state_file: str = r'A:\settings\state.json'
     analysis_request_dir: str = r'A:\requests'
     analysis_request_file: str = r'A:\requests\request1.txt'

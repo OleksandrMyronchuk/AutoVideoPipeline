@@ -1,3 +1,23 @@
 {
-  "name": "Merge `Narration and Dialogues` and `Event Timeline`"
+  "name": "Merge `Narration and Dialogues` and `Event Timeline`",
+  "fields": [
+    {
+      "key": "narration_input_dir",
+      "type": "input",
+      "name": "Narration and Dialogues folder",
+      "value": "A:\\data_2"
+    },
+    {
+      "key": "event_timeline_input_dir",
+      "type": "input",
+      "name": "Event Timeline folder",
+      "value": "A:\\data_2v1"
+    },
+    {
+      "key": "merged_output_file",
+      "type": "output",
+      "name": "Merged output file",
+      "value": "A:\\data_3\\output.json"
+    }
+  ]
 }

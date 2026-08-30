@@ -372,14 +372,20 @@ class AnalysisPageMixin:
 
         try:
             config = {key: field.value for key, field in fields.items()}
-            required_keys = {'input_dir', 'output_dir'}
+            if script.hooks.merge_json:
+                required_keys = [item.key for item in script.configs if item.field_type in {'input', 'output'}]
+            else:
+                required_keys = ['input_dir', 'output_dir']
             missing_keys = sorted(key for key in required_keys if not config.get(key))
             if missing_keys:
                 raise APIProcessingError(f'{script.name} is missing required configuration fields: {", ".join(missing_keys)}.')
-            input_dir = Path(config['input_dir'])
-            output_dir = Path(config['output_dir'])
             pipeline_logger = get_pipeline_logger('analysis', script=script.key)
-            pipeline_logger.event('analysis_requested', input_dir=str(input_dir), output_dir=str(output_dir))
+            if script.hooks.merge_json:
+                pipeline_logger.event('analysis_requested', script=script.key, config_keys=sorted(config.keys()))
+            else:
+                input_dir = Path(config['input_dir'])
+                output_dir = Path(config['output_dir'])
+                pipeline_logger.event('analysis_requested', input_dir=str(input_dir), output_dir=str(output_dir))
             service = PipelineService(self.settings.analysis_api_url, self.settings.analysis_request_timeout, self.settings.analysis_max_retries)
             result = await run.io_bound(service.analyze, script, config, pipeline_logger, on_progress, resume_event, cancel_event)
             update_progress()

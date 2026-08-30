@@ -137,9 +137,7 @@ class AnalysisRunner:
         if all(isinstance(value, list) for value in values):
             merged = [item for value in values for item in value]
         elif all(isinstance(value, dict) for value in values):
-            merged = {}
-            for value in values:
-                merged.update(value)
+            merged = list(values)
         else:
             merged = values
         output_file = Path(str(output_value))

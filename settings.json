@@ -6,7 +6,7 @@
   "analysis_api_url": "http://localhost:8085/request_custom_path",
   "analysis_workflow_path": "A:/gemini_extended",
   "analysis_clips_dir": "A:\\clips",
-  "analysis_output_dir": "A:\\data_2",
+  "analysis_output_dir": "A:\\data_3",
   "analysis_state_file": "A:\\settings\\state.json",
   "analysis_request_dir": "A:\\requests",
   "analysis_request_file": "A:\\requests\\request1.txt",
@@ -26,7 +26,12 @@
       "output_dir": "A:\\data_2v1",
       "request_file": "E:\\project\\AutoVideoPipeline\\.script_workspaces\\6e6f5b5c2b7c4f73a2d8b1c9e4f60123\\prompts\\event_timeline.txt",
       "workflow_path": "A:/gemini_extended",
-      "skip_existing": "True"
+      "skip_existing": true
+    },
+    "my_script_14b9938e": {
+      "narration_input_dir": "A:\\data_2",
+      "event_timeline_input_dir": "A:\\data_2v1",
+      "merged_output_file": "A:\\data_3\\output.json"
     }
   },
   "analysis_script_order": [
