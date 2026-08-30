@@ -6,7 +6,6 @@ Ignore ambient noise, passive footsteps, wind, idle walking across empty fields,
 
 Return JSON only, with exactly this top-level shape:
 {
-	"clip_id": "clip_042",
 	"events": [
 		{
 			"start_sec": 12,
@@ -19,4 +18,4 @@ Return JSON only, with exactly this top-level shape:
 	]
 }
 
-Rules: clip_id must identify the supplied clip; start_sec and end_sec are numbers with 0 <= start_sec <= end_sec <= clip duration; category must be one of combat, item_pickup, item_interaction, spatial_progression, trap, damage, audio_trigger, or other; action_summary must describe what happens; audio_triggers must be an array of concise strings and may be empty; intensity must be one of low, medium, or high. Do not include participants, state_update, commentary, markdown fences, or any fields outside this schema.
+Rules: start_sec and end_sec are numbers with 0 <= start_sec <= end_sec <= clip duration; category must be one of combat, item_pickup, item_interaction, spatial_progression, trap, damage, audio_trigger, or other; action_summary must describe what happens; audio_triggers must be an array of concise strings and may be empty; intensity must be one of low, medium, or high. Do not include extra fields beyond this schema, and never add participants, state_update, commentary, markdown fences, or outdated metadata.

@@ -26,7 +26,7 @@
       "output_dir": "A:\\data_2v1",
       "request_file": "E:\\project\\AutoVideoPipeline\\.script_workspaces\\6e6f5b5c2b7c4f73a2d8b1c9e4f60123\\prompts\\event_timeline.txt",
       "workflow_path": "A:/gemini_extended",
-      "skip_existing": true
+      "skip_existing": "True"
     },
     "my_script_14b9938e": {
       "narration_input_dir": "A:\\data_2",

@@ -99,7 +99,7 @@ class BufferedAPIClient:
         if isinstance(result.get('error'), str):
             raise APIProcessingError(f"API workflow error: {result['error']}")
         if script_key == 'event_timeline':
-            required = {'clip_id', 'events'}
+            required = {'events'}
             if set(result) != required:
                 extra = set(result) - required
                 if extra:
@@ -107,8 +107,6 @@ class BufferedAPIClient:
             missing = required - result.keys()
             if missing:
                 raise APIProcessingError(f"Event timeline result is missing required fields: {', '.join(sorted(missing))}.")
-            if not isinstance(result['clip_id'], str) or not result['clip_id'].strip():
-                raise APIProcessingError('Event timeline clip_id must be a non-empty string.')
             if not isinstance(result['events'], list):
                 raise APIProcessingError('Event timeline events must be an array.')
             categories = {'combat', 'item_pickup', 'item_interaction', 'spatial_progression', 'trap', 'damage', 'audio_trigger', 'other'}
