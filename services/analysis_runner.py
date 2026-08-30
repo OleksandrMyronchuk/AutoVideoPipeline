@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import threading
 from pathlib import Path
 from typing import Any, Callable
@@ -109,39 +110,72 @@ class AnalysisRunner:
         return f'{script.name}: processed {processed} clip(s); output saved to {output_dir}'
 
     @staticmethod
+    def _normalize_clip_id(value: Any) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return str(int(value)).zfill(4)
+        text = str(value).strip()
+        if not text:
+            return None
+        matches = re.findall(r'\d+', text)
+        if not matches:
+            return None
+        raw_id = matches[-1]
+        if raw_id.isdigit():
+            return raw_id.zfill(4)
+        return raw_id
+
+    @staticmethod
     def _merge_json_fields(script: AnalysisScript, config: dict[str, Any], report: Callable[..., None]) -> str:
-        input_values = [config.get(item.key) for item in script.configs if item.field_type == 'input' and config.get(item.key)]
+        input_configs = [item for item in script.configs if item.field_type == 'input' and config.get(item.key)]
         output_value = next((config.get(item.key) for item in script.configs if item.field_type == 'output' and config.get(item.key)), None)
-        if not input_values:
+        if not input_configs:
             raise APIProcessingError('Add at least one JSON input field.')
         if not output_value:
             raise APIProcessingError('Add a JSON output field.')
-        source_files = []
-        for value in input_values:
+
+        source_files: list[tuple[str, Path]] = []
+        for item in input_configs:
+            value = config.get(item.key)
             path = Path(str(value))
             if path.is_file():
-                source_files.append(path)
+                source_files.append((item.key, path))
             elif path.is_dir():
-                source_files.extend(sorted(item for item in path.glob('*.json') if item.is_file()))
+                source_files.extend((item.key, file_path) for file_path in sorted(path.glob('*.json')) if file_path.is_file())
             else:
                 raise APIProcessingError(f'JSON input path does not exist: {path}')
+
         if not source_files:
             raise APIProcessingError('No JSON files found in the configured input paths.')
         report('discovered', total=len(source_files), completed=0, processed=0, skipped=0, remaining=len(source_files))
-        values = []
-        for source_file in source_files:
+
+        grouped: dict[str, dict[str, list[Any]]] = {}
+        for config_key, source_file in source_files:
             try:
-                values.append(json.loads(source_file.read_text(encoding='utf-8-sig')))
+                parsed = json.loads(source_file.read_text(encoding='utf-8-sig'))
             except (OSError, json.JSONDecodeError) as error:
                 raise APIProcessingError(f'Could not read JSON file {source_file}: {error}') from error
-        if all(isinstance(value, list) for value in values):
-            merged = [item for value in values for item in value]
-        elif all(isinstance(value, dict) for value in values):
-            merged = list(values)
-        else:
-            merged = values
+            entry_values = parsed if isinstance(parsed, list) else [parsed]
+            category = 'narration_dialogues' if 'narration' in config_key.lower() else 'event_timeline' if 'timeline' in config_key.lower() else 'event_timeline'
+            for value in entry_values:
+                if not isinstance(value, dict):
+                    continue
+                clip_id = AnalysisRunner._normalize_clip_id(value.get('clip_id'))
+                if clip_id is None:
+                    clip_id = AnalysisRunner._normalize_clip_id(source_file.stem)
+                if clip_id is None:
+                    clip_id = 'unknown'
+                clip_entry = grouped.setdefault(clip_id, {'narration_dialogues': [], 'event_timeline': []})
+                clip_entry.setdefault(category, []).append(value)
+
+        ordered = {
+            key: grouped[key]
+            for key in sorted(grouped, key=lambda item: (0 if item.isdigit() else 1, int(item) if item.isdigit() else item))
+        }
+
         output_file = Path(str(output_value))
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        save_atomic_json(output_file, merged)
+        save_atomic_json(output_file, ordered)
         report('finished', total=len(source_files), completed=len(source_files), processed=len(source_files), skipped=0, remaining=0)
         return f'{script.name}: merged {len(source_files)} JSON file(s) into {output_file}'
