@@ -30,10 +30,24 @@ class AnalysisScript:
     key: str
     name: str
     description: str
-    prompt_file: str
+    prompt_file: str | None = None
     configs: list[ScriptConfig] = field(default_factory=list)
     hooks: ScriptHooks = field(default_factory=ScriptHooks)
     workspace_root: Path | None = field(default=None, repr=False, compare=False)
+
+    def prompt_config(self) -> ScriptConfig | None:
+        for config in self.configs:
+            if config.key == 'request_file' or config.field_type == 'prompt':
+                return config
+        return None
+
+    def prompt_default_path(self) -> str | None:
+        if self.prompt_file:
+            return self.prompt_file
+        prompt_config = self.prompt_config()
+        if prompt_config and prompt_config.default:
+            return str(prompt_config.default)
+        return None
 
 
 class ScriptPlugin(Protocol):

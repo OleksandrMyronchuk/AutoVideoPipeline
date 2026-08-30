@@ -58,10 +58,12 @@ class AnalysisRunner:
         input_dir = Path(str(config['input_dir']))
         output_dir = Path(str(config['output_dir']))
         workflow_path = str(config.get('workflow_path', ''))
-        request_file = Path(config.get('request_file', ''))
         skip_existing = bool(config.get('skip_existing', True))
         logger.info('analysis_started', extra={'event': 'analysis_started', 'script': script.key, 'input_dir': str(input_dir), 'output_dir': str(output_dir)})
-        template = request_file.read_text(encoding='utf-8-sig').strip() if request_file.is_file() else Path(__file__).parents[1].joinpath(script.prompt_file).read_text(encoding='utf-8').strip()
+        prompt_path = AnalysisRunner._resolve_prompt_template(script, config)
+        if prompt_path is None:
+            raise APIProcessingError(f'{script.name} has no prompt file configured.')
+        template = prompt_path.read_text(encoding='utf-8-sig').strip()
         if not template:
             raise APIProcessingError('The analysis prompt is empty. Pipeline stopped.')
         clips = sorted(path for path in input_dir.iterdir() if path.is_file() and path.suffix.lower() in {'.mp4', '.mov', '.mkv', '.avi', '.webm', '.m4v', '.flv'})
@@ -125,6 +127,37 @@ class AnalysisRunner:
         if raw_id.isdigit():
             return raw_id.zfill(4)
         return raw_id
+
+    @staticmethod
+    def _resolve_prompt_template(script: AnalysisScript, config: dict[str, Any]) -> Path | None:
+        candidates: list[str] = []
+        for key in ('request_file',):
+            value = config.get(key)
+            if value:
+                candidates.append(str(value))
+        if script.prompt_file:
+            candidates.append(script.prompt_file)
+        for item in script.configs:
+            if item.key == 'request_file' or item.field_type == 'prompt':
+                value = config.get(item.key, item.default)
+                if value:
+                    candidates.append(str(value))
+
+        seen: set[str] = set()
+        for candidate in candidates:
+            value = candidate.strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            path = Path(value)
+            if path.is_file():
+                return path
+            if not path.is_absolute():
+                workspace_root = script.workspace_root or Path(__file__).parents[1]
+                workspace_candidate = workspace_root / path
+                if workspace_candidate.is_file():
+                    return workspace_candidate
+        return None
 
     @staticmethod
     def _merge_json_fields(script: AnalysisScript, config: dict[str, Any], report: Callable[..., None]) -> str:

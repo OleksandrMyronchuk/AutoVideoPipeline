@@ -1,1 +1,0 @@
-Analyze this video and return structured JSON.

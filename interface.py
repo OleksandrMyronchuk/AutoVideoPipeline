@@ -135,12 +135,11 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
             config_key = field.get('key') or f'field_{index + 1}'
             configs.append(f"ScriptConfig({config_key!r}, {field['name']!r}, {field['type'].title() + ' field.'!r}, {field['value']!r}, field_type={field['type']!r})")
         hooks = 'ScriptHooks(merge_json=True)' if not script else f'ScriptHooks(include_previous_result={script.hooks.include_previous_result!r}, merge_json={script.hooks.merge_json!r})'
-        prompt_file = script.prompt_file if script else 'prompts/my_prompt.txt'
         plugin = (
             'from plugins.base import AnalysisScript, ScriptConfig, ScriptHooks\n\n\n'
             'def get_script():\n'
             f'    return AnalysisScript(key={script_key!r}, name={name!r}, description="Configured script fields.", '
-            f'prompt_file={prompt_file!r}, configs=[{", ".join(configs)}], hooks={hooks})\n'
+            f'configs=[{", ".join(configs)}], hooks={hooks})\n'
         )
         plugin_path = f'plugins/{Path(script.prompt_file).stem}.py' if script else 'plugins/my_script.py'
         provider.write(plugin_path, plugin)
@@ -309,7 +308,7 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
             index += 1
         candidate.parent.mkdir(parents=True, exist_ok=True)
         if folder == 'plugins':
-            candidate.write_text("from plugins.base import AnalysisScript, ScriptConfig\n\n\ndef get_script():\n    return AnalysisScript(key='my_script', name='My Script', description='Describe this script.', prompt_file='prompts/my_prompt.txt', configs=[ScriptConfig('input_dir', 'Input clips folder', 'Where clips are read from.', None)])\n", encoding='utf-8')
+            candidate.write_text("from plugins.base import AnalysisScript, ScriptConfig\n\n\ndef get_script():\n    return AnalysisScript(key='my_script', name='My Script', description='Describe this script.', configs=[ScriptConfig('input_dir', 'Input clips folder', 'Where clips are read from.', None)])\n", encoding='utf-8')
         else:
             candidate.write_text('Analyze this video and return structured JSON.\n', encoding='utf-8')
         ui.notify(f'Created {folder}/{candidate.name}', type='positive')
@@ -471,7 +470,7 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
     def default_plugin_content(workspace_id):
         key = f'my_script_{workspace_id[:8]}'
         prompt_path = (Path(__file__).with_name('.script_workspaces') / workspace_id / 'prompts' / 'my_prompt.txt').resolve()
-        return f"from plugins.base import AnalysisScript, ScriptConfig\n\n\ndef get_script():\n    return AnalysisScript(key='{key}', name='My Script', description='Describe this script.', prompt_file='prompts/my_prompt.txt', configs=[ScriptConfig('input_dir', 'Input clips folder', 'Where clips are read from.', None), ScriptConfig('request_file', 'Prompt file', 'Prompt file used for this script.', {str(prompt_path)!r})])\n"
+        return f"from plugins.base import AnalysisScript, ScriptConfig\n\n\ndef get_script():\n    return AnalysisScript(key='{key}', name='My Script', description='Describe this script.', configs=[ScriptConfig('input_dir', 'Input clips folder', 'Where clips are read from.', None)])\n"
 
     async def save_editor_file(self, file_select, editor_id):
         relative_path = file_select.value
@@ -489,7 +488,7 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
         parent_dialog.close()
         with ui.dialog() as dialog, ui.card().classes('bg-slate-800 text-white w-[min(820px,92vw)] p-6'):
             ui.label('Plugin documentation').classes('text-2xl font-semibold')
-            ui.markdown('''Create `plugins/my_script.py` and `prompts/my_prompt.txt`, then restart the app:\n\n```python\nfrom plugins.base import AnalysisScript, ScriptConfig\n\ndef get_script():\n    return AnalysisScript(\n        key="my_script",\n        name="My Script",\n        description="What this script analyzes.",\n        prompt_file="prompts/my_prompt.txt",\n        configs=[ScriptConfig("input_dir", "Input clips folder", "Where clips are read from.", r"A:\\clips")],\n    )\n```\n\nThe registry imports files in `plugins/` that expose `get_script()`. Keep processing logic in a separate service module and use `BufferedAPIClient` for API calls. It stops safely on HTTP failures, network failures, empty or `nothing` responses, and duplicate responses.''').classes('text-slate-200 mt-4')
+            ui.markdown('''Create `plugins/my_script.py` and `prompts/my_prompt.txt`, then restart the app:\n\n```python\nfrom plugins.base import AnalysisScript, ScriptConfig\n\ndef get_script():\n    return AnalysisScript(\n        key="my_script",\n        name="My Script",\n        description="What this script analyzes.",\n        configs=[ScriptConfig("input_dir", "Input clips folder", "Where clips are read from.", r"A:\\clips")],\n    )\n```\n\nThe registry imports files in `plugins/` that expose `get_script()`. Keep processing logic in a separate service module and use `BufferedAPIClient` for API calls. It stops safely on HTTP failures, network failures, empty or `nothing` responses, and duplicate responses.''').classes('text-slate-200 mt-4')
             ui.button('Close', on_click=dialog.close).props('flat').classes('mt-5')
         dialog.open()
 

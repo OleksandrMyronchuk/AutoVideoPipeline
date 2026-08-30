@@ -91,6 +91,10 @@ class ScriptRegistry:
 
     @staticmethod
     def prompt_text(script: AnalysisScript) -> str:
+        if not script.prompt_file:
+            return ''
         root = script.workspace_root or Path(__file__).parents[1]
         prompt_file = root / script.prompt_file
+        if not prompt_file.exists():
+            return ''
         return prompt_file.read_text(encoding='utf-8').strip()

@@ -261,7 +261,11 @@ class AnalysisPageMixin:
 
             async def run_script():
                 values = {key: field.value for key, field in fields.items()}
-                missing = [config.name for config in configs if config.value_for(values) in (None, '')]
+                missing = [
+                    config.name
+                    for config in configs
+                    if config.key != 'request_file' and config.value_for(values) in (None, '')
+                ]
                 if missing:
                     ui.notify(f'Required fields: {", ".join(missing)}', type='negative')
                     return
