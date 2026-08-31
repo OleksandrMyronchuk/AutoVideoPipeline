@@ -233,20 +233,25 @@ class AnalysisPageMixin:
 
     def open_script(self, script):
         saved = self.settings.analysis_script_configs.get(script.key, {})
+        logger.info('open_script', extra={
+            'event': 'open_script',
+            'script_key': script.key,
+            'saved_config': saved,
+        })
         configs = list(script.configs)
-        shared_configs = () if script.hooks.merge_json else (
+        shared_configs = () if script.hooks.merge_json or not script.supports_prompt else (
             ScriptConfig('input_dir', 'Input clips folder', 'Folder containing video clips to analyze.', self.settings.analysis_clips_dir),
             ScriptConfig('output_dir', 'Output folder', 'Folder where analysis JSON files are written.', self.settings.analysis_output_dir),
             ScriptConfig('request_file', 'Prompt file', 'Optional file containing an extra prompt template.', self.prompt_path_for(script)),
             ScriptConfig('workflow_path', 'Workflow path', 'Workflow path sent to the API.', self.settings.analysis_workflow_path),
-            ScriptConfig('skip_existing', 'Skip existing outputs', 'Do not send clips that already have an output JSON.', self.settings.analysis_skip_existing, 'boolean'),
         )
         declared_keys = {config.key for config in configs}
         configs.extend(config for config in shared_configs if config.key not in declared_keys)
         with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(760px,94vw)] p-6'):
             ui.label(script.name).classes('text-2xl font-semibold')
             ui.label(script.description).classes('muted mt-1')
-            ui.textarea(value=self.registry.prompt_text(script)).props('readonly outlined').classes('w-full mt-4')
+            if script.supports_prompt:
+                ui.textarea(value=self.registry.prompt_text(script)).props('readonly outlined').classes('w-full mt-4')
             fields = {}
             with ui.column().classes('w-full gap-3 mt-4'):
                 for config in configs:
@@ -254,7 +259,7 @@ class AnalysisPageMixin:
                     if config.kind == 'boolean':
                         fields[config.key] = ui.checkbox(config.name, value=bool(value), on_change=lambda event, key=config.key: self.save_analysis_script_value(script.key, key, event.value))
                     elif config.kind == 'number':
-                        fields[config.key] = ui.number(config.name, value=value, step=1, on_change=lambda event, key=config.key: self.save_analysis_script_value(script.key, key, event.value)).classes('w-full')
+                        fields[config.key] = ui.number(config.name, value=value, step=0.01, on_change=lambda event, key=config.key: self.save_analysis_script_value(script.key, key, event.value)).classes('w-full')
                     else:
                         fields[config.key] = ui.input(config.name, value='' if value is None else str(value), on_change=lambda event, key=config.key: self.save_analysis_script_value(script.key, key, event.value)).classes('w-full')
                     ui.label(config.description).classes('muted text-xs -mt-2')
@@ -376,10 +381,12 @@ class AnalysisPageMixin:
 
         try:
             config = {key: field.value for key, field in fields.items()}
+            config['skip_existing'] = True  # Always skip existing outputs by default
             if script.hooks.merge_json:
                 required_keys = [item.key for item in script.configs if item.field_type in {'input', 'output'}]
             else:
-                required_keys = ['input_dir', 'output_dir']
+                has_video_clips = any(item.key == 'video_clips' for item in script.configs)
+                required_keys = ['video_clips', 'output_dir'] if has_video_clips else ['input_dir', 'output_dir']
             missing_keys = sorted(key for key in required_keys if not config.get(key))
             if missing_keys:
                 raise APIProcessingError(f'{script.name} is missing required configuration fields: {", ".join(missing_keys)}.')

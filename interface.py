@@ -47,6 +47,12 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
 
     def open_script_constructor(self, script=None):
         existing_fields = self.constructor_fields_for(script)
+        logger.info('open_script_constructor', extra={
+            'event': 'open_script_constructor',
+            'script_key': script.key if script else None,
+            'script_name': script.name if script else None,
+            'existing_fields': existing_fields,
+        })
         with ui.dialog() as dialog, ui.card().classes('nicegui-card text-white w-[min(900px,94vw)] p-6'):
             ui.label('Edit script constructor' if script else 'Build a script constructor').classes('text-2xl font-semibold')
             name_input = ui.input('Script name', value=script.name if script else '').classes('w-full mt-4')
@@ -106,19 +112,37 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
     @staticmethod
     def constructor_fields_for(script):
         if not script or not script.workspace_root:
+            logger.debug('constructor_fields_for no workspace_root', extra={'script': script.key if script else None})
             return []
         try:
-            metadata = json.loads((script.workspace_root / '.script.json').read_text(encoding='utf-8'))
-        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            script_json_path = script.workspace_root / '.script.json'
+            metadata = json.loads(script_json_path.read_text(encoding='utf-8'))
+            logger.debug('loaded .script.json', extra={
+                'script': script.key,
+                'path': str(script_json_path),
+                'content': metadata,
+            })
+        except (FileNotFoundError, OSError, json.JSONDecodeError) as e:
+            logger.debug('failed to load .script.json', extra={
+                'script': script.key,
+                'error': str(e),
+            })
             return []
         fields = metadata.get('fields', [])
         valid_fields = [field for field in fields if isinstance(field, dict) and field.get('type') in {'input', 'output', 'prompt'}]
+        logger.debug('constructor_fields_for result', extra={
+            'script': script.key,
+            'valid_fields_count': len(valid_fields),
+            'valid_fields': valid_fields,
+        })
         if valid_fields:
             return valid_fields
-        return [
+        fallback = [
             {'key': config.key, 'type': {'output_dir': 'output', 'request_file': 'prompt'}.get(config.key, 'input'), 'name': config.name, 'value': '' if config.default is None else str(config.default)}
             for config in script.configs
         ]
+        logger.debug('using fallback fields', extra={'script': script.key, 'fallback': fallback})
+        return fallback
 
     def save_script_constructor(self, dialog, script, name, fields):
         workspace_id = script.workspace_root.name if script and script.workspace_root else uuid4().hex
@@ -126,31 +150,106 @@ class VideoPipelineUI(NavigationMixin, SettingsPageMixin, AnalysisPageMixin, Cut
         workspace.mkdir(parents=True, exist_ok=True)
         provider = FileSystemProvider(workspace)
         script_key = script.key if script else f'my_script_{workspace_id[:8]}'
-        prompt_fields = [field['value'] for field in fields if field['type'] == 'prompt' and field['value']]
-        prompt = '\n\n'.join(prompt_fields) or 'Analyze this video and return structured JSON.'
-        if not script:
-            provider.write('prompts/my_prompt.txt', prompt + '\n')
-        configs = []
-        for index, field in enumerate(fields):
-            config_key = field.get('key') or f'field_{index + 1}'
-            configs.append(f"ScriptConfig({config_key!r}, {field['name']!r}, {field['type'].title() + ' field.'!r}, {field['value']!r}, field_type={field['type']!r})")
-        hooks = 'ScriptHooks(merge_json=True)' if not script else f'ScriptHooks(include_previous_result={script.hooks.include_previous_result!r}, merge_json={script.hooks.merge_json!r})'
-        plugin = (
-            'from plugins.base import AnalysisScript, ScriptConfig, ScriptHooks\n\n\n'
-            'def get_script():\n'
-            f'    return AnalysisScript(key={script_key!r}, name={name!r}, description="Configured script fields.", '
-            f'configs=[{", ".join(configs)}], hooks={hooks})\n'
-        )
-        plugin_path = f'plugins/{Path(script.prompt_file).stem}.py' if script else 'plugins/my_script.py'
-        provider.write(plugin_path, plugin)
-        (workspace / '.script.json').write_text(json.dumps({'name': name, 'fields': fields}, indent=2) + '\n', encoding='utf-8')
-        self.registry.reload()
-        if not script and script_key not in self.settings.analysis_script_order:
-            self.settings.analysis_script_order.append(script_key)
-        self.settings_store.save(self.settings)
-        self.render_script_list()
-        dialog.close()
-        ui.notify('Script added' if not script else 'Script fields saved', type='positive')
+        
+        logger.info('save_script_constructor START', extra={
+            'event': 'save_script_constructor_start',
+            'script_key': script_key,
+            'workspace_id': workspace_id,
+            'script_name': name,
+            'fields_count': len(fields),
+            'fields': fields,
+        })
+        
+        try:
+            prompt_fields = [field['value'] for field in fields if field['type'] == 'prompt' and field['value']]
+            prompt = '\n\n'.join(prompt_fields) or 'Analyze this video and return structured JSON.'
+            if not script:
+                provider.write('prompts/my_prompt.txt', prompt + '\n')
+            
+            # Filter out skip_existing fields - they are now handled globally
+            filtered_fields = [field for field in fields if field.get('key') != 'skip_existing']
+            
+            configs = []
+            for index, field in enumerate(filtered_fields):
+                config_key = field.get('key') or f'field_{index + 1}'
+                configs.append(f"ScriptConfig({config_key!r}, {field['name']!r}, {field['type'].title() + ' field.'!r}, {field['value']!r}, field_type={field['type']!r})")
+            hooks = 'ScriptHooks(merge_json=True)' if not script else f'ScriptHooks(include_previous_result={script.hooks.include_previous_result!r}, merge_json={script.hooks.merge_json!r})'
+            plugin = (
+                'from plugins.base import AnalysisScript, ScriptConfig, ScriptHooks\n\n\n'
+                'def get_script():\n'
+                f'    return AnalysisScript(key={script_key!r}, name={name!r}, description="Configured script fields.", '
+                f'configs=[{", ".join(configs)}], hooks={hooks})\n'
+            )
+            if script and script.prompt_file:
+                plugin_path = f'plugins/{Path(script.prompt_file).stem}.py'
+            else:
+                plugin_path = f'plugins/{script_key}.py'
+            logger.debug('plugin_path determined', extra={'plugin_path': plugin_path, 'script': script.key if script else None, 'has_prompt_file': script.prompt_file if script else None})
+            provider.write(plugin_path, plugin)
+            
+            script_json_content = {'name': name, 'fields': filtered_fields}
+            (workspace / '.script.json').write_text(json.dumps(script_json_content, indent=2) + '\n', encoding='utf-8')
+            logger.info('save_script_constructor .script.json written', extra={
+                'event': 'script_json_written',
+                'script_key': script_key,
+                'file': str(workspace / '.script.json'),
+                'content': script_json_content,
+            })
+            
+            constructor_config = {}
+            for field in filtered_fields:
+                field_key = field.get('key')
+                field_type = field.get('type')
+                field_value = field.get('value')
+                logger.debug('processing field', extra={
+                    'field_key': field_key,
+                    'field_type': field_type,
+                    'field_value': field_value,
+                    'will_include': field_type in {'input', 'output'} and bool(field_value),
+                })
+                if field_type in {'input', 'output'} and field_value:
+                    constructor_config[field_key] = field_value
+            
+            logger.info('constructor_config built', extra={
+                'event': 'constructor_config_built',
+                'script_key': script_key,
+                'config': constructor_config,
+            })
+            
+            if constructor_config:
+                self.settings.analysis_script_configs[script_key] = constructor_config
+                logger.info('constructor_config saved to settings', extra={
+                    'event': 'constructor_config_saved',
+                    'script_key': script_key,
+                    'analysis_script_configs': dict(self.settings.analysis_script_configs),
+                })
+            
+            self.registry.reload()
+            if not script and script_key not in self.settings.analysis_script_order:
+                self.settings.analysis_script_order.append(script_key)
+            
+            logger.info('saving settings to disk', extra={
+                'event': 'saving_settings',
+                'script_key': script_key,
+                'analysis_script_configs': dict(self.settings.analysis_script_configs),
+            })
+            self.settings_store.save(self.settings)
+            
+            logger.info('save_script_constructor COMPLETE', extra={
+                'event': 'save_script_constructor_complete',
+                'script_key': script_key,
+            })
+            
+            self.render_script_list()
+            dialog.close()
+            ui.notify('Script added' if not script else 'Script fields saved', type='positive')
+        except Exception as e:
+            logger.exception('save_script_constructor ERROR', extra={
+                'event': 'save_script_constructor_error',
+                'script_key': script_key,
+                'error': str(e),
+            })
+            raise
 
     def open_new_script_editor(self, dialog, name):
         dialog.close()

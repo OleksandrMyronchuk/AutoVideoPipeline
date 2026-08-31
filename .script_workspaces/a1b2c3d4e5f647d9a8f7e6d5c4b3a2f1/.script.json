@@ -1,0 +1,35 @@
+{
+  "name": "High Intensity Event Detector",
+  "fields": [
+    {
+      "key": "video_clips",
+      "type": "input",
+      "name": "Video clips",
+      "value": "A:\\clips"
+    },
+    {
+      "key": "sensitivity",
+      "type": "input",
+      "name": "Sensitivity",
+      "value": "75"
+    },
+    {
+      "key": "before_action",
+      "type": "input",
+      "name": "Before action (seconds)",
+      "value": "1.0"
+    },
+    {
+      "key": "after_action",
+      "type": "input",
+      "name": "After action (seconds)",
+      "value": "0.5"
+    },
+    {
+      "key": "output_dir",
+      "type": "output",
+      "name": "Output folder",
+      "value": "A:\\analysis\\high_intensity"
+    }
+  ]
+}

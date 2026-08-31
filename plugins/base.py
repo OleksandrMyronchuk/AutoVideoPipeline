@@ -31,6 +31,7 @@ class AnalysisScript:
     name: str
     description: str
     prompt_file: str | None = None
+    supports_prompt: bool = True
     configs: list[ScriptConfig] = field(default_factory=list)
     hooks: ScriptHooks = field(default_factory=ScriptHooks)
     workspace_root: Path | None = field(default=None, repr=False, compare=False)

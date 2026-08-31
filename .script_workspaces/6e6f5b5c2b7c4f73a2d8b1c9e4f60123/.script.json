@@ -24,12 +24,6 @@
       "type": "input",
       "name": "Workflow path",
       "value": "A:/gemini_extended"
-    },
-    {
-      "key": "skip_existing",
-      "type": "input",
-      "name": "Skip existing outputs",
-      "value": "True"
     }
   ]
 }

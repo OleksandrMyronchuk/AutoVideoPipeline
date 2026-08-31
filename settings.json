@@ -18,26 +18,27 @@
       "input_dir": "A:\\clips",
       "output_dir": "A:\\data_2",
       "request_file": "E:\\project\\AutoVideoPipeline\\.script_workspaces\\09306e9a08b144f9806087daed6d8ffe\\prompts\\narration_dialogues.txt",
-      "workflow_path": "A:/gemini_extended",
-      "skip_existing": true
+      "workflow_path": "A:/gemini_extended"
     },
     "event_timeline": {
       "input_dir": "A:\\clips",
       "output_dir": "A:\\data_2v1",
       "request_file": "E:\\project\\AutoVideoPipeline\\.script_workspaces\\6e6f5b5c2b7c4f73a2d8b1c9e4f60123\\prompts\\event_timeline.txt",
-      "workflow_path": "A:/gemini_extended",
-      "skip_existing": "True"
+      "workflow_path": "A:/gemini_extended"
     },
-    "my_script_14b9938e": {
-      "narration_input_dir": "A:\\data_2",
-      "event_timeline_input_dir": "A:\\data_2v1",
-      "merged_output_file": "A:\\data_3\\output.json"
+    "high_intensity_event_detector": {
+      "video_clips": "A:\\clips",
+      "sensitivity": "75",
+      "before_action": "1.0",
+      "after_action": "0.5",
+      "output_dir": "A:\\analysis\\high_intensity"
     }
   },
   "analysis_script_order": [
     "narration_dialogues",
     "event_timeline",
-    "my_script_14b9938e"
+    "my_script_14b9938e",
+    "high_intensity_event_detector"
   ],
   "last_page": "analyze"
 }

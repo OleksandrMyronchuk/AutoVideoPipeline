@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import logging
 import re
@@ -52,20 +53,24 @@ class AnalysisRunner:
         if script.hooks.merge_json:
             return self._merge_json_fields(script, config, report)
 
-        missing_keys = [key for key in ('input_dir', 'output_dir') if not config.get(key)]
+        input_key = 'video_clips' if config.get('video_clips') else 'input_dir'
+        output_key = 'output_dir'
+        missing_keys = [key for key in (input_key, output_key) if not config.get(key)]
         if missing_keys:
             raise APIProcessingError(f'{script.name} is missing required configuration fields: {", ".join(missing_keys)}.')
-        input_dir = Path(str(config['input_dir']))
-        output_dir = Path(str(config['output_dir']))
+        input_dir = Path(str(config[input_key]))
+        output_dir = Path(str(config[output_key]))
         workflow_path = str(config.get('workflow_path', ''))
         skip_existing = bool(config.get('skip_existing', True))
         logger.info('analysis_started', extra={'event': 'analysis_started', 'script': script.key, 'input_dir': str(input_dir), 'output_dir': str(output_dir)})
-        prompt_path = AnalysisRunner._resolve_prompt_template(script, config)
-        if prompt_path is None:
-            raise APIProcessingError(f'{script.name} has no prompt file configured.')
-        template = prompt_path.read_text(encoding='utf-8-sig').strip()
-        if not template:
-            raise APIProcessingError('The analysis prompt is empty. Pipeline stopped.')
+        template = ''
+        if script.supports_prompt:
+            prompt_path = AnalysisRunner._resolve_prompt_template(script, config)
+            if prompt_path is None:
+                raise APIProcessingError(f'{script.name} has no prompt file configured.')
+            template = prompt_path.read_text(encoding='utf-8-sig').strip()
+            if not template:
+                raise APIProcessingError('The analysis prompt is empty. Pipeline stopped.')
         clips = sorted(path for path in input_dir.iterdir() if path.is_file() and path.suffix.lower() in {'.mp4', '.mov', '.mkv', '.avi', '.webm', '.m4v', '.flv'})
         if not clips:
             raise APIProcessingError(f'No video clips found in {input_dir}.')
@@ -93,11 +98,12 @@ class AnalysisRunner:
             payload = {
                 'ExecutionWorkflowPath': workflow_path,
                 '$file': str(clip.resolve()),
-                '$text': request_text,
                 'debug_mode': True,
                 'analysis_script': script.key,
                 'script_config': config,
             }
+            if script.supports_prompt:
+                payload['$text'] = request_text
             report('processing', total=len(clips), completed=completed, processed=processed, skipped=skipped, remaining=len(clips) - completed, clip=clip.name)
             logger.info('analysis_clip_started', extra={'event': 'analysis_clip_started', 'script': script.key, 'clip': str(clip)})
             result = self.client.request(payload, previous)
